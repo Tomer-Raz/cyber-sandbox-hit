@@ -38,6 +38,20 @@ The Sandbox Playground Cyber Platform enables registered users to define target 
                     └───────────────┘
 ```
 
+## Flow Steps
+
+1. Authenticate via Entra ID
+2. Send scan request (REST)
+3. Save config to Azure SQL
+4. Provision ACI container
+5. DAST scan & exploit target
+6. Send results to AI Foundry
+7. Trigger exploit validation
+8. Write logs to Cosmos DB
+9. Feed ML anomaly pipeline
+10. Ingest events to Sentinel
+11. Return reports to dashboard
+
 ## How It Works
 
 1. **Authenticate** — Log in via Microsoft Entra ID
