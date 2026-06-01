@@ -4,5 +4,9 @@
       "Bash(curl -sL https://raw.githubusercontent.com/jgraph/drawio/dev/src/main/webapp/js/diagramly/sidebar/Sidebar-Azure2.js)",
       "Read(//tmp/**)"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "fetch"
+  ],
+  "enableAllProjectMcpServers": true
 }
