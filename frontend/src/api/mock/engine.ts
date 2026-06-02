@@ -38,7 +38,7 @@ const NOW = Date.now()
 const SEC = 1000
 const MIN = 60 * SEC
 
-const REQUESTERS = ['Tomer Raz', 'A. Cohen', 'M. Levi', 'Security Bot']
+const REQUESTERS = ['John Doe', 'A. Cohen', 'M. Levi', 'Security Bot']
 const REGIONS = ['West Europe', 'North Europe', 'East US 2']
 
 let counter = 1042
@@ -59,7 +59,7 @@ const records: ScanRecord[] = [
     simDurationMs: 52 * SEC,
     baseStatus: 'running',
     region: 'West Europe',
-    requestedBy: 'Tomer Raz',
+    requestedBy: 'John Doe',
     authorized: true,
     exploitValidation: true,
   },
@@ -73,7 +73,7 @@ const records: ScanRecord[] = [
     simDurationMs: 11 * MIN,
     baseStatus: 'completed',
     region: 'West Europe',
-    requestedBy: 'Tomer Raz',
+    requestedBy: 'John Doe',
     authorized: true,
     exploitValidation: true,
   },
@@ -115,7 +115,7 @@ const records: ScanRecord[] = [
     simDurationMs: 8 * MIN,
     baseStatus: 'completed',
     region: 'East US 2',
-    requestedBy: 'Tomer Raz',
+    requestedBy: 'John Doe',
     authorized: true,
     exploitValidation: false,
   },

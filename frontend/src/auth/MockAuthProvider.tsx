@@ -6,12 +6,12 @@ import { AuthContext, type AuthContextValue, type AuthStatus } from './AuthConte
 const STORAGE_KEY = 'sbx.auth.session'
 
 const DEMO_USER: AppUser = {
-  id: 'usr_tomer',
-  name: 'Tomer Raz',
-  email: 'tomer.raz@hit.ac.il',
+  id: 'usr_john',
+  name: 'John Doe',
+  email: 'john.doe@hit.ac.il',
   role: 'Security Analyst',
   org: 'HIT · Cyber Lab',
-  initials: 'TR',
+  initials: 'JD',
 }
 
 interface StoredSession {
