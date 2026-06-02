@@ -33,13 +33,12 @@ List of workflows to build in `.github/workflows/`.
 - Upload `dist/` as artifact
 
 **Secrets**
-- `AZURE_CREDENTIALS` (OIDC)
-- `AZURE_SUBSCRIPTION_ID`, `AZURE_RG`, `AZURE_APP_NAME`
+- `AZURE_STATIC_WEB_APPS_API_TOKEN` (per env — pulled from SWA deployment token)
 - `VITE_MSAL_CLIENT_ID`, `VITE_MSAL_TENANT_ID`, `VITE_MSAL_REDIRECT_URI`
 - `VITE_API_BASE_URL`
 
 **Deploy**
-- `azure/static-web-apps-deploy@v1` or `azure/webapps-deploy@v3`
+- `Azure/static-web-apps-deploy@v1` with `app_location: frontend`, `output_location: dist`
 - GitHub Environments `dev` + `prod` (prod needs reviewer)
 
 ---

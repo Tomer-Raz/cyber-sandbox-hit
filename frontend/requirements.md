@@ -96,7 +96,7 @@ List of things to build for the React frontend.
 
 ## 10. Build & Deploy
 - Build script (`npm run build`)
-- Deploy to Azure Static Web Apps or App Service
+- Deploy to Azure Static Web Apps (auto-deploy via GitHub Actions on push to `main`)
 - Environment variables: API URL, MSAL client ID
 
 ---
