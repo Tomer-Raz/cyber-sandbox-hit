@@ -20,7 +20,7 @@ npm run dev          # http://localhost:5173
 ```
 
 Click **Continue with Microsoft** on the login screen — in demo mode this signs you in
-instantly as a sample analyst with realistic, simulated scan data.
+instantly, as a sample analyst with realistic, simulated scan data.
 
 | Script              | What it does                                  |
 | ------------------- | --------------------------------------------- |
