@@ -10,7 +10,9 @@ flowchart TB
     subgraph FRONTEND["Frontend"]
         direction TB
         USER(["User / Browser"])
-        REACT["React SPA<br/>(Dashboard & Reports)"]
+        subgraph SWA["Azure Static Web Apps"]
+            REACT["React SPA<br/>(Dashboard & Reports)"]
+        end
         USER --> REACT
     end
 
@@ -119,6 +121,7 @@ flowchart TB
 
     %% CI/CD deployments
     DEVOPS -- "Deploy backend" --> FASTAPI
+    DEVOPS -- "Deploy frontend" --> SWA
     DEVOPS -- "Push images" --> ACR
 
     %% ═══════════════════════════════════════════════
@@ -134,7 +137,7 @@ flowchart TB
     classDef cicdStyle fill:#B0BEC5,stroke:#37474F,color:#000
     classDef targetStyle fill:#FFCC80,stroke:#E65100,color:#000
 
-    class USER,REACT frontendStyle
+    class USER,REACT,SWA frontendStyle
     class ENTRA identityStyle
     class FASTAPI backendStyle
     class SQLDB,COSMOS dataStyle

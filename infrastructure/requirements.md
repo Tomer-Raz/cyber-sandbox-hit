@@ -45,6 +45,9 @@ Tracks app performance and errors.
 ## 14. GitHub Actions Setup (not Azure, but needs Azure access)
 Service principal so GitHub can deploy to Azure.
 
+## 15. Static Web Apps
+Hosts React SPA. Free SKU. Auto-deploys from GitHub on push to `main`. Built-in CDN, HTTPS, custom domain. Backend (FastAPI App Service) must allow Static Web App origin in CORS.
+
 ---
 
 ## Quick Table
@@ -65,12 +68,14 @@ Service principal so GitHub can deploy to Azure.
 | 12 | Sentinel | Threat detection |
 | 13 | App Insights | App monitoring |
 | 14 | GitHub Service Principal | CI/CD access |
+| 15 | Static Web Apps | Host React frontend |
 
 ## Build Order
 1. Resource Group + Key Vault
 2. Entra ID apps
 3. SQL + Cosmos DB
 4. ACR + App Service
-5. AI Foundry + ML
-6. Log Analytics + Sentinel + App Insights
-7. GitHub Actions hookup
+5. Static Web Apps
+6. AI Foundry + ML
+7. Log Analytics + Sentinel + App Insights
+8. GitHub Actions hookup
