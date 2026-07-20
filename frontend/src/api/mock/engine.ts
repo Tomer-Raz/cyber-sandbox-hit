@@ -39,7 +39,7 @@ const SEC = 1000
 const MIN = 60 * SEC
 
 const REQUESTERS = ['John Doe', 'A. Cohen', 'M. Levi', 'Security Bot']
-const REGIONS = ['West Europe', 'North Europe', 'East US 2']
+const REGIONS = ['europe-west1', 'europe-west4', 'us-central1']
 
 let counter = 1042
 function nextId(): string {
@@ -58,7 +58,7 @@ const records: ScanRecord[] = [
     startedAt: NOW - 18 * SEC,
     simDurationMs: 52 * SEC,
     baseStatus: 'running',
-    region: 'West Europe',
+    region: 'europe-west1',
     requestedBy: 'John Doe',
     authorized: true,
     exploitValidation: true,
@@ -72,7 +72,7 @@ const records: ScanRecord[] = [
     startedAt: NOW - 3 * 60 * MIN + 20 * SEC,
     simDurationMs: 11 * MIN,
     baseStatus: 'completed',
-    region: 'West Europe',
+    region: 'europe-west1',
     requestedBy: 'John Doe',
     authorized: true,
     exploitValidation: true,
@@ -86,7 +86,7 @@ const records: ScanRecord[] = [
     startedAt: NOW - 26 * 60 * MIN + 8 * SEC,
     simDurationMs: 3 * MIN,
     baseStatus: 'completed',
-    region: 'North Europe',
+    region: 'europe-west4',
     requestedBy: 'A. Cohen',
     authorized: true,
     exploitValidation: false,
@@ -100,7 +100,7 @@ const records: ScanRecord[] = [
     startedAt: NOW - 27 * 60 * MIN + 15 * SEC,
     simDurationMs: 24 * MIN,
     baseStatus: 'completed',
-    region: 'West Europe',
+    region: 'europe-west1',
     requestedBy: 'M. Levi',
     authorized: true,
     exploitValidation: true,
@@ -114,7 +114,7 @@ const records: ScanRecord[] = [
     startedAt: NOW - 50 * 60 * MIN + 10 * SEC,
     simDurationMs: 8 * MIN,
     baseStatus: 'completed',
-    region: 'East US 2',
+    region: 'us-central1',
     requestedBy: 'John Doe',
     authorized: true,
     exploitValidation: false,
@@ -128,7 +128,7 @@ const records: ScanRecord[] = [
     startedAt: NOW - 2 * 24 * 60 * MIN + 12 * SEC,
     simDurationMs: 7 * MIN,
     baseStatus: 'failed',
-    region: 'North Europe',
+    region: 'europe-west4',
     requestedBy: 'Security Bot',
     authorized: true,
     exploitValidation: false,
@@ -142,7 +142,7 @@ const records: ScanRecord[] = [
     startedAt: NOW - 3 * 24 * 60 * MIN + 18 * SEC,
     simDurationMs: 22 * MIN,
     baseStatus: 'completed',
-    region: 'West Europe',
+    region: 'europe-west1',
     requestedBy: 'A. Cohen',
     authorized: true,
     exploitValidation: true,
@@ -156,7 +156,7 @@ const records: ScanRecord[] = [
     startedAt: NOW - 5 * 24 * 60 * MIN + 6 * SEC,
     simDurationMs: 3 * MIN,
     baseStatus: 'completed',
-    region: 'East US 2',
+    region: 'us-central1',
     requestedBy: 'M. Levi',
     authorized: true,
     exploitValidation: false,
@@ -337,14 +337,14 @@ interface EventCtx {
 
 const EVENT_SCRIPT: EventTpl[] = [
   { at: 0.0, phase: 'provisioning', level: 'info', msg: (c) => `Scan request accepted · correlation ${c.rec.id}` },
-  { at: 0.02, phase: 'provisioning', level: 'info', msg: () => `Pulling scanner image from ACR · zap-win:latest` },
-  { at: 0.06, phase: 'provisioning', level: 'success', msg: (c) => `ACI container provisioned in ${c.rec.region}` },
+  { at: 0.02, phase: 'provisioning', level: 'info', msg: () => `Pulling scanner image from Artifact Registry · zap:latest` },
+  { at: 0.06, phase: 'provisioning', level: 'success', msg: (c) => `Cloud Run job provisioned in ${c.rec.region}` },
   { at: 0.1, phase: 'scanning', level: 'info', msg: (c) => `OWASP ZAP daemon online · policy ${SCAN_TYPE_META[c.rec.scanType].policy}` },
   { at: 0.16, phase: 'scanning', level: 'info', msg: (c) => `Spider crawling ${originOf(c.rec.target)}` },
   { at: 0.32, phase: 'scanning', level: 'info', msg: (c) => `Spider mapped ${28 + (c.findings.length % 7) * 11} URLs · ${4 + (c.findings.length % 5)} forms` },
   { at: 0.46, phase: 'scanning', level: 'warn', msg: () => `Active scan in progress · injecting probes` },
   { at: 0.62, phase: 'scanning', level: 'success', msg: (c) => `Active scan complete · ${c.findings.length + 6} raw alerts` },
-  { at: 0.67, phase: 'analyzing', level: 'info', msg: () => `Streaming findings to Azure AI Foundry` },
+  { at: 0.67, phase: 'analyzing', level: 'info', msg: () => `Streaming findings to Vertex AI` },
   { at: 0.78, phase: 'analyzing', level: 'success', msg: (c) => `CVE matching complete · ${c.findings.filter((f) => f.cveIds.length).length} CVEs correlated` },
   { at: 0.85, phase: 'validating', level: 'info', msg: () => `Launching exploit validators for high-risk findings` },
   { at: 0.92, phase: 'validating', level: 'success', msg: (c) => `${c.findings.filter((f) => f.validated).length} findings confirmed · false positives pruned` },
@@ -415,14 +415,14 @@ function buildInsight(scan: Scan, findings: Finding[]): AiInsight {
         : 'No critical exposures — hardening opportunities remain'
   return {
     headline,
-    summary: `Foundry correlated ${findings.filter((f) => f.cveIds.length).length} findings to known CVEs across ${new Set(findings.map((f) => f.category)).size} categories. ${
+    summary: `Vertex AI correlated ${findings.filter((f) => f.cveIds.length).length} findings to known CVEs across ${new Set(findings.map((f) => f.category)).size} categories. ${
       crit + high > 0
         ? 'Injection and access-control weaknesses dominate the risk profile and should be remediated first.'
         : 'Remaining items are configuration and hardening gaps with limited direct impact.'
     }`,
     topRisks: top,
     confidence: 0.78 + (findings.length % 5) * 0.03,
-    model: 'foundry-gpt-4o-cve',
+    model: 'vertex-gemini-cve',
   }
 }
 

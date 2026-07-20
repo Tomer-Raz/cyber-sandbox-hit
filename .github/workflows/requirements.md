@@ -8,7 +8,7 @@ List of workflows to build in `.github/workflows/`.
 | `frontend.yml` | Build + deploy React SPA |
 | `backend.yml` | Test + build + deploy FastAPI |
 | `scanner.yml` | Build + push scanner Docker image |
-| `infra.yml` | Deploy Azure infra (Bicep/Terraform) |
+| `infra.yml` | Deploy GCP infra (Terraform) |
 | `security.yml` | Security scans (SAST, secrets, deps) |
 
 ---
@@ -32,13 +32,15 @@ List of workflows to build in `.github/workflows/`.
 - Vite cache `node_modules/.vite`
 - Upload `dist/` as artifact
 
-**Secrets**
-- `AZURE_STATIC_WEB_APPS_API_TOKEN` (per env — pulled from SWA deployment token)
-- `VITE_MSAL_CLIENT_ID`, `VITE_MSAL_TENANT_ID`, `VITE_MSAL_REDIRECT_URI`
+**Secrets (OIDC / Workload Identity Federation)**
+- `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_SERVICE_ACCOUNT`, `GCP_PROJECT_ID`
+- `GAR_LOCATION`, `CLOUD_RUN_SERVICE`
+- `VITE_GOOGLE_CLIENT_ID`
 - `VITE_API_BASE_URL`
 
 **Deploy**
-- `Azure/static-web-apps-deploy@v1` with `app_location: frontend`, `output_location: dist`
+- Build static `dist/`, containerize (nginx), push to Artifact Registry, then
+  `google-github-actions/deploy-cloudrun@v2` (static SPA service)
 - GitHub Environments `dev` + `prod` (prod needs reviewer)
 
 ---
@@ -52,21 +54,21 @@ List of workflows to build in `.github/workflows/`.
 
 **Jobs**
 - `quality`: ruff + black + mypy + pytest (80% coverage)
-- `build-and-push`: Docker buildx → push to ACR (tags: `:sha`, `:latest`)
+- `build-and-push`: Docker buildx → push to Artifact Registry (tags: `:sha`, `:latest`)
 - `deploy`:
   - Run Alembic migrations
-  - `az webapp config container set` to new image
-  - `az webapp restart`
+  - `gcloud run deploy` with the new image
+  - Route traffic to the new revision
   - Health check `/healthz` (5 retries, 10s)
-  - Rollback to `:previous` if unhealthy
+  - Roll back to the previous revision if unhealthy
 
 **Caching**
 - `setup-python` with `cache: pip`
 
-**Secrets (OIDC)**
-- `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`
-- `ACR_NAME`, `APP_SERVICE_NAME`, `RESOURCE_GROUP`
-- DB creds from Key Vault (not GitHub)
+**Secrets (OIDC / Workload Identity Federation)**
+- `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_SERVICE_ACCOUNT`, `GCP_PROJECT_ID`
+- `GAR_LOCATION`, `GAR_REPO`, `CLOUD_RUN_SERVICE`, `GCP_REGION`
+- DB creds from Secret Manager (not GitHub)
 
 ---
 
@@ -81,11 +83,11 @@ List of workflows to build in `.github/workflows/`.
 **Jobs**
 - `lint` (ubuntu): ruff + black on Python scripts
 - `test` (ubuntu): pytest on payloads
-- `build-and-push` (windows-latest):
-  - Azure OIDC login
-  - `az acr login`
-  - Build Windows Docker image
-  - Push to ACR
+- `build-and-push` (ubuntu-latest):
+  - `google-github-actions/auth` (Workload Identity Federation)
+  - `gcloud auth configure-docker <region>-docker.pkg.dev`
+  - Build Linux Docker image
+  - Push to Artifact Registry
 - `trivy-scan` (ubuntu): Trivy on pushed image, fail on HIGH/CRITICAL, upload SARIF
 
 **Tagging**
@@ -94,9 +96,9 @@ List of workflows to build in `.github/workflows/`.
 - `:sha-<short>` — every build
 - `:pr-<num>` — PR builds (not prod)
 
-**Secrets (OIDC)**
-- `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`
-- Federated cred with `AcrPush` role
+**Secrets (OIDC / Workload Identity Federation)**
+- `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_SERVICE_ACCOUNT`, `GCP_PROJECT_ID`
+- Service account with `Artifact Registry Writer` role
 
 ---
 
@@ -108,19 +110,19 @@ List of workflows to build in `.github/workflows/`.
 - Manual dispatch → choose env
 
 **Jobs**
-- `lint`: `az bicep build` + `bicep lint` (or tflint + terraform fmt)
-- `plan`: `az deployment group what-if` (post as PR comment)
+- `lint`: `terraform fmt -check` + `tflint` + `terraform validate`
+- `plan`: `terraform plan` (post as PR comment)
 - `approve`: GitHub Environment `prod` with required reviewers
-- `apply`: deploy RG, Key Vault, App Service, ACR, SQL, Cosmos, AI Foundry, ML, Log Analytics, Sentinel
+- `apply`: `terraform apply` — Secret Manager, Cloud Run, Artifact Registry, Cloud SQL, Firestore, Vertex AI, Cloud Logging, Chronicle
 
 **Environments**
 - `dev` — auto-deploy on merge
 - `prod` — manual dispatch + reviewer
-- Param files: `main.dev.bicepparam`, `main.prod.bicepparam`
+- Var files: `dev.tfvars`, `prod.tfvars`
 
-**Secrets (OIDC)**
-- Per env: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`
-- App secrets in Key Vault
+**Secrets (OIDC / Workload Identity Federation)**
+- Per env: `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_SERVICE_ACCOUNT`, `GCP_PROJECT_ID`
+- App secrets in Secret Manager
 
 ---
 
@@ -133,8 +135,8 @@ List of workflows to build in `.github/workflows/`.
   - `npm audit --audit-level=high` (frontend)
   - `pip-audit -r requirements.txt` (backend)
   - Dependabot (`.github/dependabot.yml`): weekly pip/npm/docker/actions
-- `container.yml` — Trivy on ACR images (HIGH/CRITICAL fail)
-- `iac.yml` — Checkov on Bicep + Dockerfiles
+- `container.yml` — Trivy on Artifact Registry images (HIGH/CRITICAL fail)
+- `iac.yml` — Checkov on Terraform + Dockerfiles
 
 **Triggers**
 - PR → all scans (blocking)
@@ -153,17 +155,17 @@ List of workflows to build in `.github/workflows/`.
 
 ## Global Notes
 - Pin all actions to SHA (not floating tags)
-- Use OIDC federated creds — no long-lived secrets
+- Use Workload Identity Federation — no long-lived service-account keys
 - GitHub Environments for `dev` / `prod` separation
-- Secrets in Key Vault, referenced at runtime
+- Secrets in Secret Manager, referenced at runtime
 
 ---
 
 ## Build Order
-1. OIDC federated credentials in Entra ID
+1. Workload Identity Federation in GCP (pool + service account)
 2. GitHub Environments (`dev`, `prod`) + secrets
 3. Security pipeline (catch issues early)
-4. Infra pipeline (deploy Azure resources)
+4. Infra pipeline (deploy GCP resources)
 5. Backend pipeline
 6. Scanner pipeline
 7. Frontend pipeline

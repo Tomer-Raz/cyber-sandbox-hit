@@ -1,12 +1,12 @@
 # Sandbox Playground Cyber Platform
 
-A cloud-native, AI-driven cybersecurity platform for automated penetration testing, built on Microsoft Azure.
+A cloud-native, AI-driven cybersecurity platform for automated penetration testing, built on Google Cloud Platform.
 
-![Architecture](project_architecture.jpg)
+> **Architecture:** full system & sequence diagrams in [`architecture.md`](architecture.md) (Mermaid, renders on GitHub); editable source in [`project_architecture.drawio`](project_architecture.drawio).
 
 ## Overview
 
-The Sandbox Playground Cyber Platform enables registered users to define target servers and orchestrate automated penetration testing through an intuitive web interface. The system dynamically provisions ephemeral Windows containers for scanning, leverages Azure AI Foundry for intelligent vulnerability matching, and employs Azure Machine Learning for anomaly detection.
+The Sandbox Playground Cyber Platform enables registered users to define target servers and orchestrate automated penetration testing through an intuitive web interface. The system dynamically provisions ephemeral Linux containers for scanning, leverages Vertex AI for intelligent vulnerability matching, and employs Vertex AI pipelines for anomaly detection.
 
 > **Academic Project** — Developed as part of bachelor's studies at HIT (Holon Institute of Technology).
 
@@ -14,52 +14,52 @@ The Sandbox Playground Cyber Platform enables registered users to define target 
 
 ```
 ┌─────────────┐     ┌──────────────┐     ┌─────────────────────────┐
-│  React SPA  │────▶│  FastAPI     │────▶│  Azure Container        │
-│  (Entra ID) │◀────│  Backend     │◀────│  Instances (ACI)        │
-└─────────────┘     └──────┬───────┘     │  ┌───────┐ ┌─────────┐ │
-                           │             │  │OWASP  │ │ Exploit │ │
+│  React SPA  │────▶│  FastAPI     │────▶│  Cloud Run Jobs         │
+│  (Google    │◀────│  (Cloud Run) │◀────│  (ephemeral Linux)      │
+│   OAuth)    │     └──────┬───────┘     │  ┌───────┐ ┌─────────┐ │
+└─────────────┘            │             │  │OWASP  │ │ Exploit │ │
                     ┌──────┴───────┐     │  │ ZAP   │ │ Scripts │ │
-                    │  Azure SQL   │     │  └───────┘ └─────────┘ │
+                    │  Cloud SQL   │     │  └───────┘ └─────────┘ │
                     │  (Users &    │     └─────────────────────────┘
                     │   Configs)   │                │
                     └──────────────┘                ▼
                                         ┌─────────────────────┐
-                    ┌───────────────┐   │  Azure AI Foundry   │
-                    │  Cosmos DB    │◀──│  (CVE Matching)     │
+                    ┌───────────────┐   │  Vertex AI          │
+                    │  Firestore    │◀──│  (CVE Matching)     │
                     │  (Logs &      │   └─────────────────────┘
                     │   Telemetry)  │
                     └───────┬───────┘   ┌─────────────────────┐
-                            │           │  Azure ML           │
+                            │           │  Vertex AI          │
                             └──────────▶│  (Anomaly Detection)│
                                         └─────────────────────┘
                     ┌───────────────┐
-                    │  Microsoft    │◀── Cosmos DB + Entra ID logs
-                    │  Sentinel     │
+                    │  Chronicle    │◀── Firestore + Cloud Identity logs
+                    │  (SecOps SIEM)│
                     └───────────────┘
 ```
 
 ## Flow Steps
 
-1. Authenticate via Entra ID
+1. Authenticate via Google OAuth
 2. Send scan request (REST)
-3. Save config to Azure SQL
-4. Provision ACI container
+3. Save config to Cloud SQL
+4. Provision Cloud Run Job
 5. DAST scan & exploit target
-6. Send results to AI Foundry
+6. Send results to Vertex AI
 7. Trigger exploit validation
-8. Write logs to Cosmos DB
+8. Write logs to Firestore
 9. Feed ML anomaly pipeline
-10. Ingest events to Sentinel
+10. Ingest events to Chronicle
 11. Return reports to dashboard
 
 ## How It Works
 
-1. **Authenticate** — Log in via Microsoft Entra ID
+1. **Authenticate** — Log in via Google OAuth
 2. **Configure** — Define target IP/domain and scan parameters
-3. **Scan** — FastAPI provisions an ephemeral ACI container with OWASP ZAP
-4. **Analyze** — ZAP results are sent to Azure AI Foundry for CVE template matching
+3. **Scan** — FastAPI provisions an ephemeral Cloud Run Job with OWASP ZAP
+4. **Analyze** — ZAP results are sent to Vertex AI for CVE template matching
 5. **Exploit** — Matched vulnerabilities are validated with custom Python payloads
-6. **Report** — Logs flow to Cosmos DB; Azure ML detects anomalies; Sentinel provides SIEM
+6. **Report** — Logs flow to Firestore; Vertex AI detects anomalies; Chronicle provides SIEM
 
 Containers are destroyed immediately after each scan to minimize compute costs.
 
@@ -67,13 +67,13 @@ Containers are destroyed immediately after each scan to minimize compute costs.
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | React, SAML, Microsoft Entra ID |
+| Frontend | React, Google OAuth 2.0 |
 | Backend | Python, FastAPI, SQLAlchemy |
 | Scanning | OWASP ZAP, Custom Python exploits |
-| Containers | Azure Container Instances, Azure Container Registry |
-| AI/ML | Azure AI Foundry (LLM), Azure Machine Learning (Scikit-Learn/PyTorch) |
-| Databases | Azure SQL (Serverless), Azure Cosmos DB (Serverless) |
-| Monitoring | Microsoft Sentinel (KQL) |
+| Containers | Cloud Run Jobs, Artifact Registry |
+| AI/ML | Vertex AI (Gemini LLM), Vertex AI Pipelines (Scikit-Learn/PyTorch) |
+| Databases | Cloud SQL for PostgreSQL, Firestore (Serverless) |
+| Monitoring | Chronicle (Google Security Operations) |
 | CI/CD | GitHub Actions |
 
 ## Project Structure
@@ -83,8 +83,8 @@ cyber-sandbox-hit/
 ├── frontend/              # React SPA
 ├── backend/               # FastAPI application
 ├── scanner/               # OWASP ZAP container + exploit scripts
-├── ml/                    # Azure ML anomaly detection pipeline
-├── infra/                 # Azure infrastructure (ARM/Bicep)
+├── ml/                    # Vertex AI anomaly detection pipeline
+├── infra/                 # GCP infrastructure (Terraform)
 └── .github/workflows/     # GitHub Actions CI/CD
 ```
 
@@ -94,14 +94,14 @@ cyber-sandbox-hit/
 
 - Python 3.11+
 - Node.js 18+
-- Azure subscription with the following services enabled:
-  - Azure Container Instances & Container Registry
-  - Azure SQL Database (Serverless)
-  - Azure Cosmos DB (Serverless)
-  - Azure AI Foundry
-  - Azure Machine Learning
-  - Microsoft Sentinel
-  - Microsoft Entra ID (App Registration)
+- A GCP project with the following APIs/services enabled:
+  - Cloud Run & Artifact Registry
+  - Cloud SQL for PostgreSQL
+  - Firestore (Native mode)
+  - Vertex AI
+  - Chronicle / Google Security Operations
+  - Cloud Identity (OAuth 2.0 client)
+  - Secret Manager
 
 ### Setup
 
@@ -120,33 +120,32 @@ uvicorn app.main:app --reload
 # Frontend
 cd ../frontend
 npm install
-npm start
+npm run dev
 ```
 
 ### Environment Variables
 
-Configure the following (use Azure Key Vault in production):
+Configure the following (use Secret Manager in production):
 
 ```
-AZURE_SQL_CONNECTION_STRING=
-AZURE_COSMOS_ENDPOINT=
-AZURE_COSMOS_KEY=
-AZURE_ACR_LOGIN_SERVER=
-AZURE_AI_FOUNDRY_ENDPOINT=
-AZURE_AI_FOUNDRY_KEY=
-AZURE_SUBSCRIPTION_ID=
-AZURE_RESOURCE_GROUP=
-ENTRA_CLIENT_ID=
-ENTRA_TENANT_ID=
+DATABASE_URL=
+CLOUD_SQL_CONNECTION_NAME=
+FIRESTORE_PROJECT_ID=
+ARTIFACT_REGISTRY_REPO=
+VERTEX_AI_LOCATION=
+VERTEX_AI_MODEL=
+GCP_PROJECT_ID=
+GCP_REGION=
+GOOGLE_OAUTH_CLIENT_ID=
 ```
 
 ## CI/CD
 
 GitHub Actions automatically:
 1. Build and test the FastAPI backend
-2. Build the scanner Docker image
-3. Push the image to Azure Container Registry
-4. Deploy the backend to Azure App Service
+2. Build the scanner Docker image (Linux)
+3. Push the image to Artifact Registry
+4. Deploy the backend to Cloud Run
 
 ## Ethical Use
 

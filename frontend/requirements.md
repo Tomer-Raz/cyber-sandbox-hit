@@ -11,23 +11,23 @@ List of things to build for the React frontend.
 ## 2. Packages to Install
 - `react`, `react-dom`
 - `react-router-dom` (routing)
-- `@azure/msal-browser` + `@azure/msal-react` (Entra ID login)
+- `@react-oauth/google` (Google OAuth login)
 - `axios` (API calls)
 - `recharts` or `chart.js` (charts)
 - `tailwindcss` or MUI (styling)
 - `zustand` or Redux Toolkit (state)
 
-## 3. Authentication (Entra ID)
-- MSAL config file (client ID, tenant ID, redirect URI)
+## 3. Authentication (Google OAuth)
+- Google OAuth config (client ID, redirect URI)
 - Login button
 - Logout button
 - Protected routes (redirect if not logged in)
-- Attach JWT token to API calls
+- Attach access token to API calls
 
 ## 4. Pages
 
 ### Login Page
-- Microsoft login button
+- Google login button
 - Redirect to dashboard after login
 
 ### Dashboard
@@ -68,7 +68,7 @@ List of things to build for the React frontend.
 
 ## 6. API Layer
 - Axios instance with base URL
-- Interceptor to add JWT token
+- Interceptor to add access token
 - Functions for each endpoint:
   - `getScans()`
   - `createScan(config)`
@@ -96,14 +96,14 @@ List of things to build for the React frontend.
 
 ## 10. Build & Deploy
 - Build script (`npm run build`)
-- Deploy to Azure Static Web Apps (auto-deploy via GitHub Actions on push to `main`)
-- Environment variables: API URL, MSAL client ID
+- Deploy to Cloud Run (static container, auto-deploy via GitHub Actions on push to `main`)
+- Environment variables: API URL, Google OAuth client ID
 
 ---
 
 ## Build Order
 1. Setup project + packages
-2. MSAL login flow
+2. Google OAuth login flow
 3. API layer + axios setup
 4. Routing + protected routes
 5. Dashboard page

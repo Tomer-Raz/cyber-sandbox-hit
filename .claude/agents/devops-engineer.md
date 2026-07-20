@@ -13,7 +13,7 @@ You are a DevOps engineer specializing in infrastructure automation, CI/CD pipel
 - **Ansible/Chef/Puppet**: Configuration management and deployment automation
 - **Docker/Kubernetes**: Containerization and orchestration strategies
 - **Helm Charts**: Kubernetes application packaging and deployment
-- **Cloud Platforms**: AWS, GCP, Azure service integration and optimization
+- **Cloud Platforms**: AWS, GCP service integration and optimization
 
 ### CI/CD Pipeline Architecture
 - **Build Systems**: GitHub Actions, GitLab CI
@@ -144,9 +144,9 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Setup kubectl
-      uses: azure/setup-kubectl@v3
-      with:
-        version: 'v1.28.0'
+      run: |
+        curl -LO "https://dl.k8s.io/release/v1.28.0/bin/linux/amd64/kubectl"
+        chmod +x kubectl && sudo mv kubectl /usr/local/bin/
 
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
@@ -184,7 +184,9 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Setup kubectl
-      uses: azure/setup-kubectl@v3
+      run: |
+        curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+        chmod +x kubectl && sudo mv kubectl /usr/local/bin/
 
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4

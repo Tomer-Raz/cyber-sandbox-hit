@@ -10,7 +10,7 @@ flowchart TB
     subgraph FRONTEND["Frontend"]
         direction TB
         USER(["User / Browser"])
-        subgraph SWA["Azure Static Web Apps"]
+        subgraph HOSTING["Cloud Run (Static SPA)"]
             REACT["React SPA<br/>(Dashboard & Reports)"]
         end
         USER --> REACT
@@ -20,30 +20,30 @@ flowchart TB
     %% IDENTITY
     %% ───────────────────────────────────────────────
     subgraph IDENTITY["Identity & Access"]
-        ENTRA["Microsoft Entra ID<br/>(OAuth 2.0 / OIDC)"]
+        GAUTH["Google OAuth<br/>(OAuth 2.0 / OIDC)"]
     end
 
     %% ───────────────────────────────────────────────
     %% BACKEND
     %% ───────────────────────────────────────────────
     subgraph BACKEND["Backend"]
-        FASTAPI["FastAPI Backend<br/>(Azure App Service)"]
+        FASTAPI["FastAPI Backend<br/>(Cloud Run)"]
     end
 
     %% ───────────────────────────────────────────────
     %% DATA
     %% ───────────────────────────────────────────────
     subgraph DATA["Data Layer"]
-        SQLDB[("Azure SQL Database<br/>(Scan Configs, Users)")]
-        COSMOS[("Azure Cosmos DB<br/>(Logs, Results, Events)")]
+        SQLDB[("Cloud SQL for PostgreSQL<br/>(Scan Configs, Users)")]
+        FIRESTORE[("Firestore<br/>(Logs, Results, Events)")]
     end
 
     %% ───────────────────────────────────────────────
     %% SANDBOX
     %% ───────────────────────────────────────────────
     subgraph SANDBOX["Sandbox Environment"]
-        ACR["Azure Container Registry<br/>(ACR)"]
-        subgraph ACI["Azure Container Instances"]
+        REGISTRY["Artifact Registry"]
+        subgraph RUNJOB["Cloud Run Jobs"]
             ZAP["OWASP ZAP<br/>Scanner"]
             EXPLOIT["Exploit Scripts<br/>(CVE Validators)"]
         end
@@ -58,15 +58,15 @@ flowchart TB
     %% AI / ML
     %% ───────────────────────────────────────────────
     subgraph AIML["AI & ML"]
-        FOUNDRY["Azure AI Foundry<br/>(LLM CVE Matching)"]
-        AZUREML["Azure Machine Learning<br/>(Anomaly Detection)"]
+        VERTEXLLM["Vertex AI<br/>(LLM CVE Matching)"]
+        VERTEXML["Vertex AI<br/>(Anomaly Detection)"]
     end
 
     %% ───────────────────────────────────────────────
     %% MONITORING
     %% ───────────────────────────────────────────────
     subgraph MONITORING["Monitoring & SIEM"]
-        SENTINEL["Microsoft Sentinel<br/>(SIEM / Threat Intel)"]
+        CHRONICLE["Chronicle<br/>(SIEM / Threat Intel)"]
     end
 
     %% ───────────────────────────────────────────────
@@ -81,48 +81,48 @@ flowchart TB
     %% ═══════════════════════════════════════════════
 
     %% 1 - Authentication
-    REACT -- "1. Login request" --> ENTRA
-    ENTRA -- "JWT / Access Token" --> REACT
+    REACT -- "1. Login request" --> GAUTH
+    GAUTH -- "JWT / Access Token" --> REACT
 
     %% 2 - Scan configuration
     REACT -- "2. Configure scan" --> FASTAPI
     FASTAPI -- "Persist config" --> SQLDB
 
     %% 3 - Container provisioning
-    FASTAPI -- "3. Provision container" --> ACI
-    ACR -- "Pull image" --> ACI
+    FASTAPI -- "3. Provision container" --> RUNJOB
+    REGISTRY -- "Pull image" --> RUNJOB
 
     %% 4 - Scanning target
     ZAP -- "4. Active / Passive scan" --> TARGET
     EXPLOIT -- "6. Validate vulns" --> TARGET
 
     %% 5 - AI CVE matching
-    ZAP -- "5. Raw findings" --> FOUNDRY
-    FOUNDRY -- "Matched CVEs" --> FASTAPI
+    ZAP -- "5. Raw findings" --> VERTEXLLM
+    VERTEXLLM -- "Matched CVEs" --> FASTAPI
 
     %% 6 - Exploit validation (uses CVE results)
-    FOUNDRY -. "CVE list" .-> EXPLOIT
+    VERTEXLLM -. "CVE list" .-> EXPLOIT
 
     %% 7 - Logging
-    FASTAPI -- "7. Write logs" --> COSMOS
-    ZAP -- "Scan events" --> COSMOS
-    EXPLOIT -- "Exploit results" --> COSMOS
+    FASTAPI -- "7. Write logs" --> FIRESTORE
+    ZAP -- "Scan events" --> FIRESTORE
+    EXPLOIT -- "Exploit results" --> FIRESTORE
 
     %% 8 - Anomaly detection
-    COSMOS -- "8. Event stream" --> AZUREML
-    AZUREML -- "Alerts" --> FASTAPI
+    FIRESTORE -- "8. Event stream" --> VERTEXML
+    VERTEXML -- "Alerts" --> FASTAPI
 
     %% 9 - SIEM integration
-    COSMOS -- "9. Audit logs" --> SENTINEL
-    ENTRA -- "Sign-in logs" --> SENTINEL
+    FIRESTORE -- "9. Audit logs" --> CHRONICLE
+    GAUTH -- "Sign-in logs" --> CHRONICLE
 
     %% 10 - Reporting
     FASTAPI -- "10. Reports & data" --> REACT
 
     %% CI/CD deployments
     DEVOPS -- "Deploy backend" --> FASTAPI
-    DEVOPS -- "Deploy frontend" --> SWA
-    DEVOPS -- "Push images" --> ACR
+    DEVOPS -- "Deploy frontend" --> HOSTING
+    DEVOPS -- "Push images" --> REGISTRY
 
     %% ═══════════════════════════════════════════════
     %% STYLES
@@ -137,13 +137,13 @@ flowchart TB
     classDef cicdStyle fill:#B0BEC5,stroke:#37474F,color:#000
     classDef targetStyle fill:#FFCC80,stroke:#E65100,color:#000
 
-    class USER,REACT,SWA frontendStyle
-    class ENTRA identityStyle
+    class USER,REACT,HOSTING frontendStyle
+    class GAUTH identityStyle
     class FASTAPI backendStyle
-    class SQLDB,COSMOS dataStyle
-    class ACR,ZAP,EXPLOIT sandboxStyle
-    class FOUNDRY,AZUREML aiStyle
-    class SENTINEL monitorStyle
+    class SQLDB,FIRESTORE dataStyle
+    class REGISTRY,ZAP,EXPLOIT sandboxStyle
+    class VERTEXLLM,VERTEXML aiStyle
+    class CHRONICLE monitorStyle
     class DEVOPS cicdStyle
     class TARGET targetStyle
 ```
@@ -152,15 +152,15 @@ flowchart TB
 
 | Step | Flow | Description |
 |------|------|-------------|
-| 1 | User --> Entra ID --> React | User authenticates via Microsoft Entra ID (OAuth 2.0 / OIDC) |
-| 2 | React --> FastAPI --> Azure SQL | User configures a penetration test scan; config is persisted |
-| 3 | FastAPI --> ACI (pulls from ACR) | Backend provisions an isolated container instance for the scan |
+| 1 | User --> Google OAuth --> React | User authenticates via Google OAuth (OAuth 2.0 / OIDC) |
+| 2 | React --> FastAPI --> Cloud SQL | User configures a penetration test scan; config is persisted |
+| 3 | FastAPI --> Cloud Run Job (pulls from Artifact Registry) | Backend provisions an isolated container instance for the scan |
 | 4 | ZAP --> Target Server | OWASP ZAP performs active and passive scanning against the target |
-| 5 | ZAP --> AI Foundry --> FastAPI | Raw scan findings are sent to Azure AI Foundry for LLM-based CVE matching |
+| 5 | ZAP --> Vertex AI --> FastAPI | Raw scan findings are sent to Vertex AI for LLM-based CVE matching |
 | 6 | Exploit Scripts --> Target Server | Exploit scripts validate discovered vulnerabilities against the target |
-| 7 | All components --> Cosmos DB | Scan events, exploit results, and API logs are written to Cosmos DB |
-| 8 | Cosmos DB --> Azure ML | Event streams feed anomaly detection models in Azure Machine Learning |
-| 9 | Cosmos DB + Entra ID --> Sentinel | Audit logs and sign-in events are ingested by Microsoft Sentinel (SIEM) |
+| 7 | All components --> Firestore | Scan events, exploit results, and API logs are written to Firestore |
+| 8 | Firestore --> Vertex AI | Event streams feed anomaly detection models in Vertex AI |
+| 9 | Firestore + Cloud Identity --> Chronicle | Audit logs and sign-in events are ingested by Chronicle (SIEM) |
 | 10 | FastAPI --> React | Aggregated reports and dashboards are served back to the user |
 
 ---
@@ -174,29 +174,29 @@ sequenceDiagram
     actor User
     participant React as React SPA
     participant FastAPI as FastAPI Backend
-    participant ACI as ACI Container
+    participant Run as Cloud Run Job
     participant ZAP as OWASP ZAP
-    participant AI as Azure AI Foundry
-    participant Cosmos as Cosmos DB
+    participant AI as Vertex AI
+    participant Firestore as Firestore
 
-    Note over User,Cosmos: ---- Authentication Phase ----
+    Note over User,Firestore: ---- Authentication Phase ----
     User->>React: Open application
-    React->>React: Redirect to Entra ID login
+    React->>React: Redirect to Google OAuth login
     React-->>User: Authenticated (JWT)
 
-    Note over User,Cosmos: ---- Scan Configuration Phase ----
+    Note over User,Firestore: ---- Scan Configuration Phase ----
     User->>React: Configure scan parameters
     React->>FastAPI: POST /api/scans (target, scope, options)
-    FastAPI->>FastAPI: Validate & persist config (Azure SQL)
+    FastAPI->>FastAPI: Validate & persist config (Cloud SQL)
     FastAPI-->>React: 201 Created (scan_id)
     React-->>User: Scan queued confirmation
 
-    Note over User,Cosmos: ---- Container Provisioning Phase ----
-    FastAPI->>ACI: Provision container (image from ACR)
-    ACI-->>FastAPI: Container running (endpoint)
-    FastAPI->>Cosmos: Log: container_provisioned
+    Note over User,Firestore: ---- Container Provisioning Phase ----
+    FastAPI->>Run: Provision container (image from Artifact Registry)
+    Run-->>FastAPI: Container running (endpoint)
+    FastAPI->>Firestore: Log: container_provisioned
 
-    Note over User,Cosmos: ---- Scanning Phase ----
+    Note over User,Firestore: ---- Scanning Phase ----
     FastAPI->>ZAP: Start scan (target URL, policy)
     ZAP->>ZAP: Active & passive scan execution
 
@@ -207,38 +207,38 @@ sequenceDiagram
     end
 
     ZAP-->>FastAPI: Scan complete (raw findings)
-    FastAPI->>Cosmos: Log: scan_completed (raw results)
+    FastAPI->>Firestore: Log: scan_completed (raw results)
 
-    Note over User,Cosmos: ---- AI Analysis Phase ----
+    Note over User,Firestore: ---- AI Analysis Phase ----
     FastAPI->>AI: POST /analyze (raw findings)
     AI->>AI: LLM processes findings
     AI->>AI: Match against CVE database
     AI-->>FastAPI: Enriched results (CVE IDs, severity, CVSS)
-    FastAPI->>Cosmos: Log: ai_analysis_completed
+    FastAPI->>Firestore: Log: ai_analysis_completed
 
-    Note over User,Cosmos: ---- Exploit Validation Phase ----
-    FastAPI->>ACI: Execute exploit scripts (matched CVEs)
-    ACI->>ACI: Run targeted exploit validation
-    ACI-->>FastAPI: Validation results (confirmed / false positive)
-    FastAPI->>Cosmos: Log: exploit_validation_completed
+    Note over User,Firestore: ---- Exploit Validation Phase ----
+    FastAPI->>Run: Execute exploit scripts (matched CVEs)
+    Run->>Run: Run targeted exploit validation
+    Run-->>FastAPI: Validation results (confirmed / false positive)
+    FastAPI->>Firestore: Log: exploit_validation_completed
 
-    Note over User,Cosmos: ---- Reporting Phase ----
+    Note over User,Firestore: ---- Reporting Phase ----
     FastAPI->>FastAPI: Generate final report
-    FastAPI->>Cosmos: Log: report_generated
+    FastAPI->>Firestore: Log: report_generated
     FastAPI-->>React: Full report payload
     React-->>User: Display interactive dashboard
 
-    Note over User,Cosmos: ---- Cleanup Phase ----
-    FastAPI->>ACI: Terminate container
-    ACI-->>FastAPI: Container destroyed
-    FastAPI->>Cosmos: Log: container_terminated
+    Note over User,Firestore: ---- Cleanup Phase ----
+    FastAPI->>Run: Terminate container
+    Run-->>FastAPI: Container destroyed
+    FastAPI->>Firestore: Log: container_terminated
 ```
 
 ### Sequence Diagram Notes
 
-- **Authentication** uses Microsoft Entra ID with OAuth 2.0 authorization code flow. The React SPA receives a JWT that is attached to every subsequent API call.
-- **Container isolation** ensures each scan runs in a dedicated Azure Container Instance, preventing cross-scan interference and providing a clean environment.
+- **Authentication** uses Google OAuth with the OAuth 2.0 authorization code flow. The React SPA receives a token that is attached to every subsequent API call.
+- **Container isolation** ensures each scan runs in a dedicated Cloud Run Job, preventing cross-scan interference and providing a clean environment.
 - **Progress polling** keeps the user informed. A future enhancement could replace polling with WebSocket-based real-time updates.
-- **AI analysis** leverages a large language model hosted in Azure AI Foundry to correlate raw scanner output with known CVEs, reducing manual triage effort.
+- **AI analysis** leverages a large language model hosted in Vertex AI to correlate raw scanner output with known CVEs, reducing manual triage effort.
 - **Exploit validation** acts as a confirmation step -- only vulnerabilities that can be actively demonstrated are flagged as "confirmed," reducing false positive noise.
 - **Cleanup** is automatic: containers are terminated and deallocated once the scan lifecycle completes, keeping infrastructure costs predictable.

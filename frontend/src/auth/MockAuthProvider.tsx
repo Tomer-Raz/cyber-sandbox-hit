@@ -41,7 +41,7 @@ function fakeJwt(user: AppUser): string {
   return `${header}.${payload}.mock-signature`
 }
 
-/** Demo auth — instant login, no Entra tenant required. Persists to localStorage. */
+/** Demo auth — instant login, no Google OAuth client required. Persists to localStorage. */
 export function MockAuthProvider({ children }: { children: React.ReactNode }) {
   const initial = loadSession()
   const [user, setUser] = useState<AppUser | null>(initial?.user ?? null)

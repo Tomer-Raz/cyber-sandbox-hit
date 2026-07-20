@@ -124,7 +124,7 @@ export const PHASES: PhaseMeta[] = [
     key: 'provisioning',
     label: 'Provisioning',
     short: 'Provision',
-    description: 'Spinning up an ephemeral ACI container from the registry.',
+    description: 'Spinning up an ephemeral Cloud Run job from the registry.',
     icon: 'server',
   },
   {
@@ -138,7 +138,7 @@ export const PHASES: PhaseMeta[] = [
     key: 'analyzing',
     label: 'AI Analysis',
     short: 'Analyze',
-    description: 'Azure AI Foundry matches raw findings to known CVEs.',
+    description: 'Vertex AI matches raw findings to known CVEs.',
     icon: 'sparkles',
   },
   {
