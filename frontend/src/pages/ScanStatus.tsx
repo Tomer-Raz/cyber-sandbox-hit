@@ -187,7 +187,7 @@ export default function ScanStatus() {
       <Card
         title="Execution log"
         icon="terminal"
-        eyebrow="ACI container · live"
+        eyebrow="Cloud Run job · live"
         bodyClassName="p-0"
         actions={
           running ? (

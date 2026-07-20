@@ -3,11 +3,8 @@
 interface ImportMetaEnv {
   readonly VITE_API_BASE_URL: string
   readonly VITE_USE_MOCKS: string
-  readonly VITE_AUTH_MODE: 'mock' | 'msal'
-  readonly VITE_ENTRA_CLIENT_ID: string
-  readonly VITE_ENTRA_TENANT_ID: string
-  readonly VITE_ENTRA_REDIRECT_URI: string
-  readonly VITE_API_SCOPE: string
+  readonly VITE_AUTH_MODE: 'mock' | 'google'
+  readonly VITE_GOOGLE_CLIENT_ID: string
 }
 
 interface ImportMeta {

@@ -110,7 +110,7 @@ Technical reference guide in `references/frontend_best_practices.md`:
 **Backend:** Node.js, Express, GraphQL, REST APIs
 **Database:** PostgreSQL, Prisma, NeonDB, Supabase
 **DevOps:** Docker, Kubernetes, Terraform, GitHub Actions, CircleCI
-**Cloud:** AWS, GCP, Azure
+**Cloud:** AWS, GCP
 
 ## Development Workflow
 

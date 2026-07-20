@@ -3,7 +3,7 @@
 React SPA for the **Sandbox Playground Cyber Platform** — an AI-driven, automated
 penetration-testing console. This is the **frontend only**. It ships with a complete
 in-browser **mock backend**, so the entire experience runs end-to-end with **no FastAPI
-server and no Entra ID tenant** required.
+server and no Google OAuth client** required.
 
 > Aesthetic: a dark "security operations console" — deep ink, electric-cyan accents, a
 > warm severity scale, blueprint grid + scanlines, and a Chakra Petch / Hanken Grotesk /
@@ -19,7 +19,7 @@ npm install
 npm run dev          # http://localhost:5173
 ```
 
-Click **Continue with Microsoft** on the login screen — in demo mode this signs you in
+Click **Continue with Google** on the login screen — in demo mode this signs you in
 instantly, as a sample analyst with realistic, simulated scan data.
 
 | Script              | What it does                                  |
@@ -38,7 +38,7 @@ instantly, as a sample analyst with realistic, simulated scan data.
 Everything is wired to a deterministic mock engine (`src/api/mock/`) that simulates the
 real scan lifecycle on a clock:
 
-- **Auth** — mock Entra ID login/logout, JWT-shaped token, persisted session, protected routes.
+- **Auth** — mock Google login/logout, JWT-shaped token, persisted session, protected routes.
 - **Dashboard** — KPIs, 7-day findings trend, severity mix, recent scans (auto-refreshing).
 - **New Scan** — target validation, scan-profile picker, engine options, authorization gate.
 - **Live Scan Status** — a newly launched scan **progresses through every phase** (provision →
@@ -50,18 +50,15 @@ real scan lifecycle on a clock:
 
 ---
 
-## Connecting a real backend / Entra ID
+## Connecting a real backend / Google OAuth
 
 All integration points are env-driven (see `.env.example`). Copy it to `.env.local`:
 
 ```ini
 VITE_USE_MOCKS=false                       # call the real FastAPI backend
 VITE_API_BASE_URL=https://your-api/api
-VITE_AUTH_MODE=msal                        # use real Microsoft Entra ID
-VITE_ENTRA_CLIENT_ID=...
-VITE_ENTRA_TENANT_ID=...
-VITE_ENTRA_REDIRECT_URI=http://localhost:5173
-VITE_API_SCOPE=api://<client-id>/access_as_user
+VITE_AUTH_MODE=google                      # use real Google OAuth
+VITE_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
 ```
 
 - **API** — `src/api/index.ts` already branches between the mock engine and an Axios client
@@ -69,7 +66,7 @@ VITE_API_SCOPE=api://<client-id>/access_as_user
   shape: `GET /dashboard`, `GET /scans`, `GET /scans/:id`, `GET /scans/:id/status`,
   `GET /scans/:id/report`, `POST /scans`, `POST /scans/:id/cancel`.
 - **Auth** — `src/auth/AuthProvider.tsx` swaps between `MockAuthProvider` and the real
-  `MsalAuthProvider` (`@azure/msal-react`) purely on `VITE_AUTH_MODE`. No code changes needed.
+  `GoogleAuthProvider` (`@react-oauth/google`) purely on `VITE_AUTH_MODE`. No code changes needed.
 
 ---
 
@@ -89,7 +86,7 @@ frontend/
 │   │   ├── client.ts           # Axios instance + interceptors
 │   │   ├── index.ts            # API facade (mock ⇄ live)
 │   │   └── mock/               # catalog + simulation engine
-│   ├── auth/                   # AuthContext, mock + MSAL providers, RequireAuth
+│   ├── auth/                   # AuthContext, mock + Google providers, RequireAuth
 │   ├── store/                  # zustand stores (UI/toasts, scans cache)
 │   ├── components/
 │   │   ├── ui/                 # Button, Card, Badge, Field, Modal, Toaster, Icon, …
@@ -117,12 +114,13 @@ frontend/
 ## Tech stack
 
 React 18 · TypeScript · Vite 5 · React Router 6 · Tailwind CSS 3 · Zustand · Recharts ·
-Framer Motion · Axios · `@azure/msal-react`.
+Framer Motion · Axios · `@react-oauth/google`.
 
 ## Deployment
 
-`npm run build` emits a static `dist/` suitable for **Azure Static Web Apps**. Because it's an
-SPA, configure a fallback rewrite to `/index.html` for client-side routing.
+`npm run build` emits a static `dist/` suitable for **Cloud Run** (served by a lightweight
+static container, e.g. nginx). Because it's an SPA, configure a fallback rewrite to
+`/index.html` for client-side routing.
 
 ---
 

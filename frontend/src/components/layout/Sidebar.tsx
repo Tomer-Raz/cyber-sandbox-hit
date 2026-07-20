@@ -80,7 +80,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             <span className="font-mono text-[0.66rem] uppercase tracking-widest2">Demo · Mock API</span>
           </div>
           <p className="mt-1.5 text-[0.7rem] leading-relaxed text-faint">
-            Running on simulated data — no live backend or Entra tenant required.
+            Running on simulated data — no live backend or Google OAuth client required.
           </p>
         </div>
         {user && (

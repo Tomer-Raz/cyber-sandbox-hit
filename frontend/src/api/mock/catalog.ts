@@ -148,9 +148,9 @@ export const VULN_CATALOG: VulnTemplate[] = [
     paths: ['/api/fetch', '/api/webhook', '/api/preview'],
     description:
       'The URL preview feature fetches arbitrary user-supplied URLs, including internal metadata endpoints, exposing cloud credentials.',
-    evidence: 'url=http://169.254.169.254/metadata/instance  →  Azure IMDS response returned',
+    evidence: 'url=http://metadata.google.internal/computeMetadata/v1/instance/  →  GCP metadata response returned',
     recommendation:
-      'Enforce an allow-list of destinations, block link-local/private ranges, and require IMDSv2-style header tokens.',
+      'Enforce an allow-list of destinations, block link-local/private ranges (incl. 169.254.169.254), and require the Metadata-Flavor: Google header for metadata access.',
     references: [CWE(918), OWASP('Top10/A10_2021-Server-Side_Request_Forgery_%28SSRF%29/', 'A10 SSRF')],
     baseConfidence: 'firm',
   },
@@ -266,7 +266,7 @@ export const VULN_CATALOG: VulnTemplate[] = [
     paths: ['/api/checkout', '/api/users', '/debug'],
     description:
       'Unhandled exceptions return full stack traces, framework versions, and SQL fragments to the client.',
-    evidence: 'HTTP 500 body contains stack trace + "Microsoft.Data.SqlClient" connection string fragment',
+    evidence: 'HTTP 500 body contains stack trace + "org.postgresql.util.PSQLException" connection string fragment',
     recommendation:
       'Return generic error pages, log details server-side only, and disable debug mode in production.',
     references: [CWE(209), OWASP('Top10/A04_2021-Insecure_Design/', 'A04 Insecure Design')],
@@ -348,7 +348,7 @@ export const VULN_CATALOG: VulnTemplate[] = [
     paths: ['/'],
     description:
       'The Server and X-Powered-By headers reveal exact software versions, aiding targeted exploitation.',
-    evidence: 'Server: Microsoft-IIS/10.0   X-Powered-By: ASP.NET',
+    evidence: 'Server: nginx/1.25.3   X-Powered-By: Express',
     recommendation: 'Suppress version banners on the web server and application framework.',
     references: [CWE(200)],
     baseConfidence: 'confirmed',

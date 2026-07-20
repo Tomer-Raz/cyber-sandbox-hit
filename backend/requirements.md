@@ -18,16 +18,16 @@ List of things to build for the FastAPI backend.
 ## 2. Packages to Install
 - `fastapi`
 - `uvicorn` (server)
-- `sqlalchemy` + `asyncpg` or `pyodbc` (Azure SQL)
+- `sqlalchemy` + `asyncpg` (Cloud SQL for PostgreSQL)
+- `cloud-sql-python-connector` (Cloud SQL connectivity)
 - `alembic` (DB migrations)
 - `pydantic` + `pydantic-settings`
-- `azure-identity`
-- `azure-mgmt-containerinstance` (ACI)
-- `azure-cosmos` (Cosmos DB)
-- `azure-ai-inference` (AI Foundry)
-- `azure-keyvault-secrets`
+- `google-auth` (ADC + Google ID-token verification)
+- `google-cloud-run` (Cloud Run Jobs)
+- `google-cloud-firestore` (Firestore)
+- `google-cloud-aiplatform` (Vertex AI)
+- `google-cloud-secret-manager`
 - `python-owasp-zap-v2.4`
-- `msal` (token validation)
 - `python-jose` (JWT)
 - `httpx` (async HTTP)
 - `pytest` + `pytest-asyncio`
@@ -35,16 +35,16 @@ List of things to build for the FastAPI backend.
 ## 3. Config
 - `.env` file (local only)
 - `config.py` with Pydantic Settings
-- Load secrets from Key Vault in production
-- Variables: DB connection, Cosmos endpoint, ACR creds, AI Foundry key, Entra tenant ID
+- Load secrets from Secret Manager in production
+- Variables: DB connection, Firestore project, Artifact Registry repo, Vertex AI location/model, Google OAuth client ID
 
 ## 4. Authentication
-- Validate JWT tokens from Entra ID
+- Validate Google ID tokens (audience = OAuth client ID)
 - Dependency `get_current_user`
 - Role-based access (admin, user)
 - Reject expired tokens
 
-## 5. Database (Azure SQL)
+## 5. Database (Cloud SQL for PostgreSQL)
 
 ### Models (SQLAlchemy)
 - `User` (id, email, name, role, created_at)
@@ -57,9 +57,9 @@ List of things to build for the FastAPI backend.
 - Alembic migrations
 - Connection pooling
 
-## 6. Cosmos DB
+## 6. Firestore
 - Client wrapper
-- Containers: `scan_logs`, `ai_results`, `exploit_results`, `audit_events`
+- Collections: `scan_logs`, `ai_results`, `exploit_results`, `audit_events`
 - Insert helpers
 - Query helpers (by scan_id, by date)
 
@@ -87,10 +87,10 @@ List of things to build for the FastAPI backend.
 
 ## 8. Services
 
-### ACI Service
-- Provision Windows container from ACR
+### Cloud Run Job Service
+- Provision Linux container from Artifact Registry
 - Pass scan config as env vars
-- Poll container status
+- Poll job execution status
 - Tear down on finish or fail
 
 ### ZAP Service
@@ -99,7 +99,7 @@ List of things to build for the FastAPI backend.
 - Get raw findings
 
 ### AI Service
-- Send ZAP findings to AI Foundry
+- Send ZAP findings to Vertex AI
 - Parse LLM response (CVE list, severity, CVSS)
 - Cache common results
 
@@ -109,32 +109,32 @@ List of things to build for the FastAPI backend.
 - Return confirmed/false-positive
 
 ### Log Service
-- Write events to Cosmos
+- Write events to Firestore
 - Include scan_id, timestamp, event_type
 
 ## 9. Background Tasks
 - Use FastAPI `BackgroundTasks` or Celery
 - Long scan = async task
-- Status updates via DB / Cosmos
+- Status updates via DB / Firestore
 
 ## 10. Security
 - CORS config (allow React origin only)
 - Rate limiting (per user)
 - Input validation (Pydantic)
-- No secrets in code (Key Vault)
+- No secrets in code (Secret Manager)
 - Authorization checks per route
 - Audit log all scan actions
 
 ## 11. Logging & Monitoring
 - Structured logging (JSON)
-- Application Insights integration
+- Cloud Monitoring / Cloud Trace integration
 - Request ID middleware
 - Error handlers
 
 ## 12. Testing
 - Unit tests (services, models)
 - Integration tests (routes + DB)
-- Mock Azure SDKs
+- Mock GCP SDKs
 - Coverage 80%+
 
 ## 13. Deployment
@@ -143,23 +143,23 @@ List of things to build for the FastAPI backend.
 - GitHub Actions workflow:
   - Lint + test
   - Build image
-  - Push to ACR
-  - Deploy to App Service
+  - Push to Artifact Registry
+  - Deploy to Cloud Run
 - Health check endpoint `/health`
 
 ---
 
 ## Build Order
 1. Project setup + packages
-2. Config + Key Vault
+2. Config + Secret Manager
 3. DB models + migrations
-4. Auth (JWT validation)
+4. Auth (Google ID-token validation)
 5. Target routes
-6. Cosmos DB wrapper
-7. ACI service (container provisioning)
+6. Firestore wrapper
+7. Cloud Run Job service (container provisioning)
 8. ZAP service
 9. Scan routes (start + status)
-10. AI Foundry service
+10. Vertex AI service
 11. Exploit service
 12. Report routes
 13. Logging + monitoring

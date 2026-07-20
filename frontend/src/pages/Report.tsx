@@ -149,7 +149,7 @@ export default function Report() {
           </div>
         </Card>
 
-        <Card title="AI analysis" eyebrow="Azure AI Foundry" icon="sparkles">
+        <Card title="AI analysis" eyebrow="Vertex AI" icon="sparkles">
           <div className="text-sm font-semibold text-ink">{ai.headline}</div>
           <p className="mt-2 text-xs leading-relaxed text-muted">{ai.summary}</p>
           {ai.topRisks.length > 0 && (

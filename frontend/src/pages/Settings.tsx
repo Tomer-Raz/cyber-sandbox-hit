@@ -64,7 +64,7 @@ export default function Settings() {
           <ReadField label="Organisation" value={user.org} />
         </div>
         <p className="mt-3 flex items-center gap-1.5 text-xs text-faint">
-          <Icon name="lock" size={13} /> Profile details are managed by Microsoft Entra ID.
+          <Icon name="lock" size={13} /> Profile details are managed by your Google account.
         </p>
       </Card>
 
@@ -123,7 +123,7 @@ export default function Settings() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="text-sm text-muted">
             Signed in via{' '}
-            <span className="font-mono text-xs text-ink">{mode === 'msal' ? 'Entra ID' : 'demo (mock)'}</span>{' '}
+            <span className="font-mono text-xs text-ink">{mode === 'google' ? 'Google' : 'demo (mock)'}</span>{' '}
             session.
           </div>
           <div className="flex gap-2">

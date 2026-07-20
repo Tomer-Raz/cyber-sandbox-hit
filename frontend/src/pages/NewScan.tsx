@@ -33,7 +33,7 @@ const isValidTarget = (t: string) =>
 const OPTION_DEFS: { key: keyof ScanOptions; label: string; desc: string; icon: 'zap' | 'scan' | 'sparkles' | 'flask' }[] = [
   { key: 'activeScan', label: 'Active scan', desc: 'Send live injection payloads to the target', icon: 'zap' },
   { key: 'ajaxSpider', label: 'AJAX spider', desc: 'Crawl JavaScript-rendered routes', icon: 'scan' },
-  { key: 'aiCveMatching', label: 'AI CVE matching', desc: 'Correlate findings via Azure AI Foundry', icon: 'sparkles' },
+  { key: 'aiCveMatching', label: 'AI CVE matching', desc: 'Correlate findings via Vertex AI', icon: 'sparkles' },
   { key: 'exploitValidation', label: 'Exploit validation', desc: 'Confirm vulnerabilities, cut false positives', icon: 'flask' },
 ]
 

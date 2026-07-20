@@ -7,7 +7,7 @@ export interface AuthContextValue {
   user: AppUser | null
   isAuthenticated: boolean
   status: AuthStatus
-  mode: 'mock' | 'msal'
+  mode: 'mock' | 'google'
   login: () => Promise<void>
   logout: () => void
   getToken: () => string | null

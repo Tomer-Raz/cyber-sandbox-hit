@@ -43,7 +43,7 @@ This skill covers world-class capabilities in:
 **ML Frameworks:** PyTorch, TensorFlow, Scikit-learn, XGBoost
 **Data Tools:** Spark, Airflow, dbt, Kafka, Databricks
 **LLM Frameworks:** LangChain, LlamaIndex, DSPy
-**Deployment:** Docker, Kubernetes, AWS/GCP/Azure
+**Deployment:** Docker, Kubernetes, AWS/GCP
 **Monitoring:** MLflow, Weights & Biases, Prometheus
 **Databases:** PostgreSQL, BigQuery, Snowflake, Pinecone
 

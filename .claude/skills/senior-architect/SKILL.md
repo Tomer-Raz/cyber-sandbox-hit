@@ -110,7 +110,7 @@ Technical reference guide in `references/tech_decision_guide.md`:
 **Backend:** Node.js, Express, GraphQL, REST APIs
 **Database:** PostgreSQL, Prisma, NeonDB, Supabase
 **DevOps:** Docker, Kubernetes, Terraform, GitHub Actions, CircleCI
-**Cloud:** AWS, GCP, Azure
+**Cloud:** AWS, GCP
 
 ## Development Workflow
 
