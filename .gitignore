@@ -14,6 +14,8 @@ CLAUDE.md
 *.pem
 *-key.json
 service-account*.json
+secret.txt
+client_secret_321010762291-kqipett824lfoms10vu57nd0ls8v9a54.apps.googleusercontent.com.json
 
 # ── Terraform ────────────────────────────────────────────────────────────────
 **/.terraform/
