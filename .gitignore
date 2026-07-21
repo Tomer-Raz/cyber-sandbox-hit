@@ -1,0 +1,44 @@
+# ── Claude Code ──────────────────────────────────────────────────────────────
+# Local assistant config, agents, skills and project instructions. Kept on disk,
+# out of the repo — each developer maintains their own.
+.claude/
+CLAUDE.md
+.mcp.json
+*.claude.md
+.claudeignore
+
+# ── Environment / secrets ────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+*.pem
+*-key.json
+service-account*.json
+
+# ── Terraform ────────────────────────────────────────────────────────────────
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+tfplan
+*.tfplan
+
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# ── Node ─────────────────────────────────────────────────────────────────────
+node_modules/
+dist/
+*.log
+
+# ── OS / editor ──────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

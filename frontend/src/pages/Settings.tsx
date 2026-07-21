@@ -1,11 +1,27 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { CopyOutlined, LogoutOutlined, ReloadOutlined } from '@ant-design/icons'
+import {
+  Avatar,
+  Button,
+  Card,
+  Descriptions,
+  Flex,
+  Form,
+  Input,
+  Popconfirm,
+  Space,
+  Switch,
+  Typography,
+} from 'antd'
 import { useAuth } from '@/auth/AuthContext'
-import { toast } from '@/store/uiStore'
-import { Button } from '@/components/ui/Button'
-import { Card } from '@/components/ui/Card'
-import { Icon } from '@/components/ui/Icon'
-import { Switch } from '@/components/ui/Field'
+import { toast } from '@/lib/notify'
+
+interface Prefs {
+  emailAlerts: boolean
+  autoValidate: boolean
+  weeklyDigest: boolean
+}
 
 function genApiKey(): string {
   const bytes = new Uint8Array(16)
@@ -17,20 +33,14 @@ function genApiKey(): string {
 export default function Settings() {
   const { user, logout, mode } = useAuth()
   const navigate = useNavigate()
-
-  const [prefs, setPrefs] = useState({ emailAlerts: true, autoValidate: true, weeklyDigest: false })
   const [apiKey, setApiKey] = useState(genApiKey)
-  const [revealed, setRevealed] = useState(false)
 
-  const setPref = (key: keyof typeof prefs, value: boolean) => {
-    setPrefs((p) => ({ ...p, [key]: value }))
-    toast.success('Preference saved')
-  }
+  const initialPrefs: Prefs = { emailAlerts: true, autoValidate: true, weeklyDigest: false }
 
   const copyKey = async () => {
     try {
       await navigator.clipboard.writeText(apiKey)
-      toast.success('Copied', 'API key copied to clipboard.')
+      toast.success('API key copied to clipboard')
     } catch {
       toast.error('Copy failed')
     }
@@ -38,110 +48,113 @@ export default function Settings() {
 
   const regenerate = () => {
     setApiKey(genApiKey())
-    setRevealed(true)
     toast.warning('API key regenerated', 'The previous key has been revoked.')
   }
-
-  const masked = `${apiKey.slice(0, 12)}${'•'.repeat(20)}`
 
   if (!user) return null
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      {/* Profile */}
-      <Card title="Profile" eyebrow="Account" icon="user">
-        <div className="flex items-center gap-4">
-          <span className="grid size-16 place-items-center rounded-2xl bg-accent-sheen font-display text-xl font-bold text-bg">
+    <Space direction="vertical" size="large" style={{ width: '100%', maxWidth: 800 }}>
+      <Card title="Profile">
+        <Flex gap={16} align="center" wrap>
+          <Avatar size={56} style={{ backgroundColor: '#1677ff' }}>
             {user.initials}
-          </span>
-          <div className="min-w-0">
-            <div className="text-lg font-semibold text-ink">{user.name}</div>
-            <div className="truncate text-sm text-muted">{user.email}</div>
+          </Avatar>
+          <div style={{ minWidth: 0 }}>
+            <Typography.Text strong style={{ fontSize: 16 }}>
+              {user.name}
+            </Typography.Text>
+            <br />
+            <Typography.Text type="secondary" style={{ wordBreak: 'break-all' }}>
+              {user.email}
+            </Typography.Text>
           </div>
-        </div>
-        <div className="mt-5 grid gap-3 sm:grid-cols-2">
-          <ReadField label="Role" value={user.role} />
-          <ReadField label="Organisation" value={user.org} />
-        </div>
-        <p className="mt-3 flex items-center gap-1.5 text-xs text-faint">
-          <Icon name="lock" size={13} /> Profile details are managed by your Google account.
-        </p>
+        </Flex>
+
+        <Descriptions
+          style={{ marginTop: 20 }}
+          size="small"
+          bordered
+          column={{ xs: 1, sm: 2 }}
+          items={[
+            { key: 'role', label: 'Role', children: user.role },
+            { key: 'org', label: 'Organisation', children: user.org },
+          ]}
+        />
+
+        <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 12 }}>
+          Profile details are managed by your Google account.
+        </Typography.Text>
       </Card>
 
-      {/* Preferences */}
-      <Card title="Notifications & automation" eyebrow="Preferences" icon="sliders">
-        <div className="space-y-3">
-          <Switch
-            checked={prefs.emailAlerts}
-            onChange={(v) => setPref('emailAlerts', v)}
+      <Card title="Notifications & automation">
+        <Form
+          layout="vertical"
+          initialValues={initialPrefs}
+          onValuesChange={() => toast.success('Preference saved')}
+        >
+          <Form.Item
+            name="emailAlerts"
             label="Email alerts"
-            description="Notify me when a scan finds critical or high-severity issues"
-            icon={<Icon name="bell" size={17} />}
-          />
-          <Switch
-            checked={prefs.autoValidate}
-            onChange={(v) => setPref('autoValidate', v)}
+            valuePropName="checked"
+            extra="Notify me when a scan finds critical or high-severity issues"
+          >
+            <Switch />
+          </Form.Item>
+          <Form.Item
+            name="autoValidate"
             label="Auto-run exploit validation"
-            description="Validate high-risk findings automatically after each scan"
-            icon={<Icon name="flask" size={17} />}
-          />
-          <Switch
-            checked={prefs.weeklyDigest}
-            onChange={(v) => setPref('weeklyDigest', v)}
+            valuePropName="checked"
+            extra="Validate high-risk findings automatically after each scan"
+          >
+            <Switch />
+          </Form.Item>
+          <Form.Item
+            name="weeklyDigest"
             label="Weekly digest"
-            description="A Monday summary of scan activity and open risks"
-            icon={<Icon name="activity" size={17} />}
-          />
-        </div>
+            valuePropName="checked"
+            extra="A Monday summary of scan activity and open risks"
+            style={{ marginBottom: 0 }}
+          >
+            <Switch />
+          </Form.Item>
+        </Form>
       </Card>
 
-      {/* API access */}
-      <Card title="API access" eyebrow="Integrations" icon="key">
-        <p className="text-sm text-muted">
+      <Card title="API access">
+        <Typography.Paragraph type="secondary">
           Use this key to trigger scans from CI pipelines or scripts against the FastAPI backend.
-        </p>
-        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-          <code className="flex-1 truncate rounded-xl border border-line bg-bg/60 px-3 py-2.5 font-mono text-xs text-ink">
-            {revealed ? apiKey : masked}
-          </code>
-          <div className="flex gap-2">
-            <Button variant="secondary" size="sm" iconLeft="eye" onClick={() => setRevealed((r) => !r)}>
-              {revealed ? 'Hide' : 'Reveal'}
-            </Button>
-            <Button variant="secondary" size="sm" iconLeft="copy" onClick={copyKey}>
-              Copy
-            </Button>
-            <Button variant="secondary" size="sm" iconLeft="refresh" onClick={regenerate}>
-              Rotate
-            </Button>
-          </div>
-        </div>
+        </Typography.Paragraph>
+        <Input.Password readOnly value={apiKey} className="mono" />
+        <Space wrap style={{ marginTop: 12 }}>
+          <Button icon={<CopyOutlined />} onClick={copyKey}>
+            Copy
+          </Button>
+          <Button icon={<ReloadOutlined />} onClick={regenerate}>
+            Rotate
+          </Button>
+        </Space>
       </Card>
 
-      {/* Session */}
-      <Card title="Session" eyebrow="Security" icon="shield">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="text-sm text-muted">
-            Signed in via{' '}
-            <span className="font-mono text-xs text-ink">{mode === 'google' ? 'Google' : 'demo (mock)'}</span>{' '}
-            session.
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              iconLeft="refresh"
-              onClick={() => {
+      <Card title="Session">
+        <Flex wrap gap={12} align="center" justify="space-between">
+          <Typography.Text type="secondary">
+            Signed in via <Typography.Text code>{mode === 'google' ? 'Google' : 'demo (mock)'}</Typography.Text>
+          </Typography.Text>
+          <Space wrap>
+            <Popconfirm
+              title="Reset demo data?"
+              description="Clears local session and simulated scans."
+              onConfirm={() => {
                 localStorage.clear()
                 window.location.reload()
               }}
             >
-              Reset demo data
-            </Button>
+              <Button icon={<ReloadOutlined />}>Reset demo data</Button>
+            </Popconfirm>
             <Button
-              variant="danger"
-              size="sm"
-              iconLeft="logout"
+              danger
+              icon={<LogoutOutlined />}
               onClick={() => {
                 logout()
                 toast.info('Signed out')
@@ -150,18 +163,9 @@ export default function Settings() {
             >
               Sign out
             </Button>
-          </div>
-        </div>
+          </Space>
+        </Flex>
       </Card>
-    </div>
-  )
-}
-
-function ReadField({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border border-line bg-surface-2/50 px-3.5 py-2.5">
-      <div className="eyebrow mb-1">{label}</div>
-      <div className="text-sm text-ink">{value}</div>
-    </div>
+    </Space>
   )
 }

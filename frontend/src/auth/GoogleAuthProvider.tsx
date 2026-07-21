@@ -1,29 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import {
-  GoogleOAuthProvider,
-  googleLogout,
-  useGoogleLogin,
-  type TokenResponse,
-} from '@react-oauth/google'
+import { GoogleOAuthProvider, googleLogout } from '@react-oauth/google'
 import type { AppUser } from '@/types'
 import { registerTokenGetter, registerUnauthorizedHandler } from '@/api/client'
 import { initialsFromName } from '@/lib/format'
 import { AuthContext, type AuthContextValue, type AuthStatus } from './AuthContext'
-import { googleClientId, googleScopes } from './googleConfig'
+import { googleClientId } from './googleConfig'
+import { decodeIdToken, millisUntilExpiry, type GoogleIdTokenClaims } from './idToken'
 
-interface GoogleUserInfo {
-  sub: string
-  name?: string
-  email?: string
-  picture?: string
-}
-
-function infoToUser(info: GoogleUserInfo): AppUser {
-  const name = info.name ?? info.email ?? 'Member'
+function claimsToUser(claims: GoogleIdTokenClaims): AppUser {
+  const name = claims.name ?? claims.email ?? 'Member'
   return {
-    id: info.sub,
+    id: claims.sub,
     name,
-    email: info.email ?? '',
+    email: claims.email ?? '',
     role: 'Member',
     org: 'Google Account',
     initials: initialsFromName(name),
@@ -31,12 +20,17 @@ function infoToUser(info: GoogleUserInfo): AppUser {
 }
 
 function GoogleBridge({ children }: { children: React.ReactNode }) {
+  // The ID token itself is the bearer credential. The backend verifies its
+  // signature and checks aud === VITE_GOOGLE_CLIENT_ID, which is what makes a
+  // token minted for some other Google app unusable here.
   const tokenRef = useRef<string | null>(null)
-  const pending = useRef<{ resolve: () => void; reject: (e?: unknown) => void } | null>(null)
+  const expiryTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [user, setUser] = useState<AppUser | null>(null)
   const [status, setStatus] = useState<AuthStatus>('idle')
 
   const logout = useCallback(() => {
+    if (expiryTimer.current) clearTimeout(expiryTimer.current)
+    expiryTimer.current = null
     tokenRef.current = null
     googleLogout()
     setUser(null)
@@ -48,39 +42,35 @@ function GoogleBridge({ children }: { children: React.ReactNode }) {
     registerUnauthorizedHandler(logout)
   }, [logout])
 
-  // The Google access token is used as the bearer for the FastAPI backend,
-  // which verifies it against the OAuth client ID.
-  const runLogin = useGoogleLogin({
-    scope: googleScopes,
-    onSuccess: async (resp: TokenResponse) => {
-      tokenRef.current = resp.access_token
-      try {
-        const r = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-          headers: { Authorization: `Bearer ${resp.access_token}` },
-        })
-        setUser(infoToUser((await r.json()) as GoogleUserInfo))
-      } catch {
-        setUser(infoToUser({ sub: 'google-user' }))
-      }
-      setStatus('authenticated')
-      pending.current?.resolve()
-      pending.current = null
-    },
-    onError: (err) => {
-      setStatus('idle')
-      pending.current?.reject(err)
-      pending.current = null
-    },
-  })
+  useEffect(() => () => void (expiryTimer.current && clearTimeout(expiryTimer.current)), [])
 
+  const loginWithCredential = useCallback(
+    (credential: string) => {
+      const claims = decodeIdToken(credential)
+      if (!claims) {
+        setStatus('idle')
+        throw new Error('Malformed Google credential')
+      }
+
+      tokenRef.current = credential
+      setUser(claimsToUser(claims))
+      setStatus('authenticated')
+
+      // Google ID tokens last an hour. Drop the session exactly when the token
+      // dies rather than letting the app send an expired bearer.
+      const ttl = millisUntilExpiry(claims)
+      if (expiryTimer.current) clearTimeout(expiryTimer.current)
+      expiryTimer.current = ttl > 0 ? setTimeout(logout, ttl) : null
+      if (ttl <= 0) logout()
+    },
+    [logout],
+  )
+
+  // Google's ID-token flow only comes from their rendered button, so there is
+  // no programmatic entry point here. Login renders <GoogleLogin> instead.
   const login = useCallback(
-    () =>
-      new Promise<void>((resolve, reject) => {
-        pending.current = { resolve, reject }
-        setStatus('loading')
-        runLogin()
-      }),
-    [runLogin],
+    () => Promise.reject(new Error('Sign in using the Google button')),
+    [],
   )
 
   const value: AuthContextValue = {
@@ -91,6 +81,7 @@ function GoogleBridge({ children }: { children: React.ReactNode }) {
     login,
     logout,
     getToken: () => tokenRef.current,
+    loginWithCredential,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
@@ -98,6 +89,12 @@ function GoogleBridge({ children }: { children: React.ReactNode }) {
 
 /** Real Google OAuth provider (used when VITE_AUTH_MODE=google). */
 export function GoogleAuthProvider({ children }: { children: React.ReactNode }) {
+  if (!googleClientId) {
+    throw new Error(
+      'VITE_AUTH_MODE=google requires VITE_GOOGLE_CLIENT_ID to be set at build time.',
+    )
+  }
+
   return (
     <GoogleOAuthProvider clientId={googleClientId}>
       <GoogleBridge>{children}</GoogleBridge>

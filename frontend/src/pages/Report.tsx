@@ -1,24 +1,39 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { ArrowLeftOutlined, DownloadOutlined, FilePdfOutlined } from '@ant-design/icons'
+import {
+  Button,
+  Card,
+  Col,
+  Flex,
+  Progress,
+  Result,
+  Row,
+  Space,
+  Statistic,
+  Timeline,
+  Typography,
+} from 'antd'
 import { api } from '@/api'
-import { toast } from '@/store/uiStore'
-import { cn } from '@/lib/cn'
+import { toast } from '@/lib/notify'
 import { SCAN_TYPE_META, SEVERITY_META } from '@/lib/constants'
 import { formatDateTime, riskBand } from '@/lib/format'
-import type { ScanReport } from '@/types'
-import { Button } from '@/components/ui/Button'
-import { Card } from '@/components/ui/Card'
-import { Icon } from '@/components/ui/Icon'
-import { LoaderBlock } from '@/components/ui/Spinner'
-import { EmptyState } from '@/components/ui/EmptyState'
-import { RadialGauge } from '@/components/ui/RadialGauge'
-import { SeverityDonut } from '@/components/charts/SeverityDonut'
+import type { ScanEvent, ScanReport } from '@/types'
 import { FindingsByCategoryBar } from '@/components/charts/FindingsByCategoryBar'
-import { SeverityBar } from '@/components/dashboard/SeverityBar'
+import { SeverityBar } from '@/components/charts/SeverityBar'
+import { SeverityDonut } from '@/components/charts/SeverityDonut'
 import { FindingsTable } from '@/components/scans/FindingsTable'
+
+const TIMELINE_COLOR: Record<ScanEvent['level'], string> = {
+  info: 'blue',
+  success: 'green',
+  warn: 'orange',
+  error: 'red',
+}
 
 export default function Report() {
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const [report, setReport] = useState<ScanReport | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -34,43 +49,40 @@ export default function Report() {
 
   if (error) {
     return (
-      <div className="panel">
-        <EmptyState
-          icon="alert-triangle"
-          title="Report unavailable"
-          description={error}
-          action={
-            <Button to="/scans" variant="secondary" iconLeft="arrow-left">
-              Back to scans
-            </Button>
-          }
-        />
-      </div>
+      <Result
+        status="404"
+        title="Report unavailable"
+        subTitle={error}
+        extra={
+          <Button type="primary" onClick={() => navigate('/scans')}>
+            Back to scans
+          </Button>
+        }
+      />
     )
   }
 
-  if (!report) return <LoaderBlock label="Compiling report…" />
+  if (!report) return <Card loading />
 
   const { scan, findings, ai, findingsByCategory, events } = report
 
   if (scan.status !== 'completed') {
     return (
-      <div className="panel">
-        <EmptyState
-          icon="clock"
-          title="Scan still in progress"
-          description="The full report becomes available once the scan completes."
-          action={
-            <Button to={`/scans/${scan.id}`} iconLeft="activity">
-              View live progress
-            </Button>
-          }
-        />
-      </div>
+      <Result
+        status="info"
+        title="Scan still in progress"
+        subTitle="The full report becomes available once the scan completes."
+        extra={
+          <Button type="primary" onClick={() => navigate(`/scans/${scan.id}`)}>
+            View live progress
+          </Button>
+        }
+      />
     )
   }
 
   const band = riskBand(scan.riskScore)
+  const bandHex = SEVERITY_META[band.tone].hex
   const meta = SCAN_TYPE_META[scan.scanType]
   const validated = findings.filter((f) => f.validated).length
   const cves = new Set(findings.flatMap((f) => f.cveIds)).size
@@ -84,7 +96,7 @@ export default function Report() {
     a.download = `${scan.id}-report.json`
     a.click()
     URL.revokeObjectURL(url)
-    toast.success('Report exported', 'Saved as JSON.')
+    toast.success('Report exported as JSON')
   }
 
   const exportPdf = () => {
@@ -93,144 +105,137 @@ export default function Report() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <Link to={`/scans/${scan.id}`} className="eyebrow mb-2 inline-flex items-center gap-1.5 hover:text-accent">
-            <Icon name="arrow-left" size={13} /> Scan
+    <Space direction="vertical" size="large" style={{ width: '100%' }}>
+      <Flex wrap gap={16} align="flex-end" justify="space-between">
+        <div style={{ minWidth: 0 }}>
+          <Link to={`/scans/${scan.id}`}>
+            <ArrowLeftOutlined /> Scan
           </Link>
-          <h2 className="truncate font-display text-2xl font-bold text-ink">{scan.name}</h2>
-          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-xs text-muted">
-            <span className="flex items-center gap-1.5">
-              <Icon name="globe" size={13} className="text-faint" /> {scan.target}
-            </span>
-            <span className="size-0.5 rounded-full bg-faint" />
-            <span>{meta.label}</span>
-            <span className="size-0.5 rounded-full bg-faint" />
-            <span>completed {formatDateTime(scan.completedAt)}</span>
-          </div>
+          <Typography.Title level={4} style={{ margin: '8px 0 4px' }}>
+            {scan.name}
+          </Typography.Title>
+          <Typography.Text type="secondary" style={{ wordBreak: 'break-all' }}>
+            {scan.target} · {meta.label} · completed {formatDateTime(scan.completedAt)}
+          </Typography.Text>
         </div>
-        <div className="flex gap-2">
-          <Button variant="secondary" size="sm" iconLeft="download" onClick={exportJson}>
+        <Space wrap>
+          <Button icon={<DownloadOutlined />} onClick={exportJson}>
             JSON
           </Button>
-          <Button variant="secondary" size="sm" iconLeft="file" onClick={exportPdf}>
+          <Button icon={<FilePdfOutlined />} onClick={exportPdf}>
             PDF
           </Button>
-        </div>
-      </div>
+        </Space>
+      </Flex>
 
-      {/* Summary */}
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card title="Risk posture" eyebrow="Aggregate" icon="gauge">
-          <div className="flex items-center gap-5">
-            <RadialGauge value={scan.riskScore} colorHex={SEVERITY_META[band.tone].hex} label="risk" />
-            <div>
-              <div className={cn('font-display text-xl font-bold', SEVERITY_META[band.tone].text)}>
-                {band.label}
+      <Row gutter={[16, 16]}>
+        <Col xs={24} lg={8}>
+          <Card title="Risk posture" style={{ height: '100%' }}>
+            <Flex wrap gap={20} align="center">
+              <Progress type="dashboard" percent={scan.riskScore} strokeColor={bandHex} size={120} />
+              <div style={{ minWidth: 160, flex: 1 }}>
+                <Typography.Title level={5} style={{ margin: 0, color: bandHex }}>
+                  {band.label}
+                </Typography.Title>
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  Weighted across {findings.length} findings and exploit validation.
+                </Typography.Text>
+                <div style={{ marginTop: 12 }}>
+                  <SeverityBar counts={scan.counts} />
+                </div>
               </div>
-              <p className="mt-1 max-w-[12rem] text-xs leading-relaxed text-muted">
-                Weighted across {findings.length} findings and exploit validation results.
-              </p>
-              <div className="mt-3">
-                <SeverityBar counts={scan.counts} />
-              </div>
+            </Flex>
+          </Card>
+        </Col>
+
+        <Col xs={24} lg={8}>
+          <Card title="Breakdown" style={{ height: '100%' }}>
+            <Row gutter={[16, 16]}>
+              <Col xs={12}>
+                <Statistic title="Total findings" value={findings.length} />
+              </Col>
+              <Col xs={12}>
+                <Statistic
+                  title="Critical + High"
+                  value={criticalHigh}
+                  valueStyle={{ color: SEVERITY_META.critical.hex }}
+                />
+              </Col>
+              <Col xs={12}>
+                <Statistic
+                  title="Validated"
+                  value={validated}
+                  valueStyle={{ color: SEVERITY_META.low.hex }}
+                />
+              </Col>
+              <Col xs={12}>
+                <Statistic title="CVEs matched" value={cves} />
+              </Col>
+            </Row>
+          </Card>
+        </Col>
+
+        <Col xs={24} lg={8}>
+          <Card title="AI analysis" extra={<Typography.Text type="secondary">Vertex AI</Typography.Text>} style={{ height: '100%' }}>
+            <Typography.Text strong>{ai.headline}</Typography.Text>
+            <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginTop: 8 }}>
+              {ai.summary}
+            </Typography.Paragraph>
+            {ai.topRisks.length > 0 && (
+              <ul style={{ paddingInlineStart: 18, margin: '0 0 12px', fontSize: 12 }}>
+                {ai.topRisks.map((r) => (
+                  <li key={r}>{r}</li>
+                ))}
+              </ul>
+            )}
+            <Flex justify="space-between">
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                {ai.model}
+              </Typography.Text>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                {Math.round(ai.confidence * 100)}% confidence
+              </Typography.Text>
+            </Flex>
+          </Card>
+        </Col>
+      </Row>
+
+      <Row gutter={[16, 16]}>
+        <Col xs={24} lg={10}>
+          <Card title="By severity">
+            <SeverityDonut counts={scan.counts} size={200} />
+            <div style={{ marginTop: 16 }}>
+              <SeverityBar counts={scan.counts} showLegend />
             </div>
-          </div>
-        </Card>
+          </Card>
+        </Col>
+        <Col xs={24} lg={14}>
+          <Card title="By category">
+            <FindingsByCategoryBar data={findingsByCategory} />
+          </Card>
+        </Col>
+      </Row>
 
-        <Card title="Breakdown" eyebrow="Findings" icon="layers">
-          <div className="grid grid-cols-2 gap-3">
-            <Kpi label="Total" value={findings.length} icon="bug" />
-            <Kpi label="Critical + High" value={criticalHigh} icon="alert-octagon" tone="text-critical" />
-            <Kpi label="Validated" value={validated} icon="shield-check" tone="text-low" />
-            <Kpi label="CVEs matched" value={cves} icon="hash" tone="text-accent" />
-          </div>
-        </Card>
-
-        <Card title="AI analysis" eyebrow="Vertex AI" icon="sparkles">
-          <div className="text-sm font-semibold text-ink">{ai.headline}</div>
-          <p className="mt-2 text-xs leading-relaxed text-muted">{ai.summary}</p>
-          {ai.topRisks.length > 0 && (
-            <ul className="mt-3 space-y-1.5">
-              {ai.topRisks.map((r, i) => (
-                <li key={i} className="flex items-start gap-2 text-xs text-ink/85">
-                  <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-accent" />
-                  {r}
-                </li>
-              ))}
-            </ul>
-          )}
-          <div className="mt-3 flex items-center justify-between border-t border-line/60 pt-3 font-mono text-[0.62rem] text-faint">
-            <span>{ai.model}</span>
-            <span>{Math.round(ai.confidence * 100)}% confidence</span>
-          </div>
-        </Card>
-      </div>
-
-      {/* Charts */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card title="By severity" icon="layers">
-          <div className="flex items-center gap-4">
-            <div className="shrink-0">
-              <SeverityDonut counts={scan.counts} size={168} />
-            </div>
-            <SeverityBar counts={scan.counts} showLegend className="flex-1" />
-          </div>
-        </Card>
-        <Card title="By category" icon="hash">
-          <FindingsByCategoryBar data={findingsByCategory} />
-        </Card>
-      </div>
-
-      {/* Findings */}
-      <Card title="Findings" eyebrow={`${findings.length} total`} icon="bug" bodyClassName="p-0">
+      <Card title={`Findings (${findings.length})`}>
         <FindingsTable findings={findings} />
       </Card>
 
-      {/* Timeline */}
-      <Card title="Scan timeline" eyebrow="Lifecycle" icon="activity">
-        <ol className="relative space-y-3 pl-4">
-          <span className="absolute left-[3px] top-1 h-[calc(100%-0.5rem)] w-px bg-line" />
-          {events.map((ev) => (
-            <li key={ev.id} className="relative flex items-center gap-3">
-              <span
-                className={cn(
-                  'absolute -left-4 size-2 rounded-full ring-2 ring-bg',
-                  ev.level === 'success' ? 'bg-low' : ev.level === 'error' ? 'bg-critical' : ev.level === 'warn' ? 'bg-medium' : 'bg-accent',
-                )}
-              />
-              <span className="w-16 shrink-0 font-mono text-[0.66rem] text-faint">
-                {formatDateTime(ev.ts).split(', ')[1] ?? ''}
-              </span>
-              <span className="text-xs text-muted">{ev.message}</span>
-            </li>
-          ))}
-        </ol>
+      <Card title="Scan timeline">
+        <Timeline
+          items={events.map((ev) => ({
+            key: ev.id,
+            color: TIMELINE_COLOR[ev.level],
+            children: (
+              <Space size={8} wrap>
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  {formatDateTime(ev.ts)}
+                </Typography.Text>
+                <span>{ev.message}</span>
+              </Space>
+            ),
+          }))}
+        />
       </Card>
-    </div>
-  )
-}
-
-function Kpi({
-  label,
-  value,
-  icon,
-  tone = 'text-ink',
-}: {
-  label: string
-  value: number
-  icon: 'bug' | 'alert-octagon' | 'shield-check' | 'hash'
-  tone?: string
-}) {
-  return (
-    <div className="rounded-xl border border-line bg-surface-2/50 p-3">
-      <div className="flex items-center justify-between">
-        <span className="eyebrow">{label}</span>
-        <Icon name={icon} size={15} className={tone} />
-      </div>
-      <div className={cn('nums mt-1.5 font-display text-2xl font-bold', tone)}>{value}</div>
-    </div>
+    </Space>
   )
 }

@@ -1,0 +1,48 @@
+project_id  = "cyber-sandbox-hit"
+region      = "europe-west1"
+zone        = "europe-west1-b"
+environment = "dev"
+
+# ── Cost controls ────────────────────────────────────────────────────────────
+# VPC + Cloud NAT + reserved IP ≈ $45/month idle. Off = Cloud SQL over the
+# Cloud SQL connector and free default Cloud Run egress.
+enable_private_networking = false
+
+# Cheapest Cloud SQL that still runs: shared-core, HDD, no PITR.
+db_tier              = "db-f1-micro"
+db_disk_type         = "PD_HDD"
+db_disk_size         = 10
+db_enable_pitr       = false
+db_activation_policy = "ALWAYS" # "NEVER" keeps it stopped: ~$1/month, storage only
+
+# Instance ceilings cap worst-case Cloud Run spend.
+max_backend_instances  = 3
+max_frontend_instances = 2
+
+# Duplicates log ingestion into BigQuery — leave off until you need hunting SQL.
+enable_chronicle_export = false
+
+# Budget alert. Needs roles/billing.admin on the account.
+billing_account_id = "0116FD-C97AD8-862324"
+monthly_budget     = 30
+budget_currency    = "ILS"
+
+# ── Data ─────────────────────────────────────────────────────────────────────
+# Firestore multi-region (eur3 = Europe). Cannot be changed after creation.
+firestore_location = "eur3"
+
+db_deletion_protection = false
+
+# ── Auth / CI ────────────────────────────────────────────────────────────────
+# Filled in after creating the OAuth 2.0 Web client in the console.
+google_oauth_client_id = ""
+
+github_owner = "Tomer-Raz"
+github_repo  = "cyber-sandbox-hit"
+
+# Receives Cloud Monitoring alerts and budget notifications. Empty disables them.
+alert_email = ""
+
+# ── AI ───────────────────────────────────────────────────────────────────────
+vertex_location = "europe-west1"
+vertex_model    = "gemini-2.0-flash"

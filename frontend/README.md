@@ -5,9 +5,9 @@ penetration-testing console. This is the **frontend only**. It ships with a comp
 in-browser **mock backend**, so the entire experience runs end-to-end with **no FastAPI
 server and no Google OAuth client** required.
 
-> Aesthetic: a dark "security operations console" — deep ink, electric-cyan accents, a
-> warm severity scale, blueprint grid + scanlines, and a Chakra Petch / Hanken Grotesk /
-> JetBrains Mono type system.
+> UI is **Ant Design v5** with a single `ConfigProvider` theme (light, primary `#1677ff`).
+> Deliberately flat and minimal — default antd styling, generous spacing, no custom design
+> system and almost no bespoke CSS.
 
 ---
 
@@ -39,14 +39,18 @@ Everything is wired to a deterministic mock engine (`src/api/mock/`) that simula
 real scan lifecycle on a clock:
 
 - **Auth** — mock Google login/logout, JWT-shaped token, persisted session, protected routes.
-- **Dashboard** — KPIs, 7-day findings trend, severity mix, recent scans (auto-refreshing).
-- **New Scan** — target validation, scan-profile picker, engine options, authorization gate.
+- **Dashboard** — KPI `Statistic` cards, 7-day findings trend, severity mix, recent scans.
+- **New Scan** — antd `Form` with target validation, scan-profile picker, engine options,
+  authorization gate.
 - **Live Scan Status** — a newly launched scan **progresses through every phase** (provision →
-  scan → AI analysis → exploit validation → report) with a streaming terminal log and a
-  cancel flow. Polls the mock every ~1.5 s.
-- **Report** — risk gauge, AI summary, severity donut + category bar charts (Recharts), a
-  sortable / filterable / expandable findings table with real-world CVEs, and JSON / PDF export.
+  scan → AI analysis → exploit validation → report) shown as antd `Steps` + `Progress`, with a
+  streaming log and a cancel flow. Polls the mock every ~1.5 s.
+- **Report** — risk dashboard gauge, AI summary, severity donut + category bar (Recharts), an
+  expandable findings `Table` with real-world CVEs, event `Timeline`, and JSON / PDF export.
 - **Settings** — profile, notification toggles, API-key rotation, session reset.
+
+Layout is responsive via antd `Layout` + `Grid`: a collapsible `Sider` on desktop, a `Drawer`
+on mobile. Verified at 375px with no horizontal scrolling.
 
 ---
 
@@ -75,26 +79,29 @@ VITE_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
 ```
 frontend/
 ├── index.html
-├── tailwind.config.js          # design tokens (colors, fonts, animations)
+├── Dockerfile / nginx.conf     # static container for Cloud Run
 ├── src/
-│   ├── main.tsx                # entry: Router + AuthProvider
-│   ├── App.tsx                 # routes + Backdrop + Toaster
-│   ├── index.css               # CSS variables, base styles, utilities
+│   ├── main.tsx                # entry: ConfigProvider theme + antd App + Router + Auth
+│   ├── App.tsx                 # routes (code-split via React.lazy)
+│   ├── index.css               # ~20 lines; antd provides the design system
 │   ├── types/                  # shared domain models
-│   ├── lib/                    # cn, formatting, prng, constants (severity/status/phase meta)
+│   ├── lib/
+│   │   ├── constants.ts        # severity/status/phase meta → antd Tag colours + chart hex
+│   │   ├── notify.ts           # toast helper bridged to antd message/notification
+│   │   └── format.ts, prng.ts
 │   ├── api/
 │   │   ├── client.ts           # Axios instance + interceptors
 │   │   ├── index.ts            # API facade (mock ⇄ live)
 │   │   └── mock/               # catalog + simulation engine
 │   ├── auth/                   # AuthContext, mock + Google providers, RequireAuth
-│   ├── store/                  # zustand stores (UI/toasts, scans cache)
+│   ├── store/                  # zustand scans cache
 │   ├── components/
-│   │   ├── ui/                 # Button, Card, Badge, Field, Modal, Toaster, Icon, …
-│   │   ├── layout/             # AppShell, Sidebar, Topbar, Backdrop
-│   │   ├── charts/             # SeverityDonut, TrendArea, FindingsByCategoryBar
-│   │   ├── dashboard/          # StatCard, SeverityBar
-│   │   └── scans/              # ScanCard, PhaseStepper, FindingsTable
-│   └── pages/                  # Login, Dashboard, ScansList, NewScan, ScanStatus, Report, Settings
+│   │   ├── Brand.tsx
+│   │   ├── layout/AppLayout    # antd Layout: Sider + Header + Content + mobile Drawer
+│   │   ├── charts/             # SeverityDonut, TrendArea, FindingsByCategoryBar, SeverityBar
+│   │   └── scans/              # ScanTable, FindingsTable
+│   └── pages/                  # Login, Dashboard, ScansList, NewScan, ScanStatus,
+│                               # Report, Settings, NotFound
 ```
 
 ### Routes
@@ -108,19 +115,20 @@ frontend/
 | `/scans/:id`         | Live scan status              | protected |
 | `/scans/:id/report`  | Full report                   | protected |
 | `/settings`          | Settings                      | protected |
+| `*`                  | 404 (`Result`)                | public    |
 
 ---
 
 ## Tech stack
 
-React 18 · TypeScript · Vite 5 · React Router 6 · Tailwind CSS 3 · Zustand · Recharts ·
-Framer Motion · Axios · `@react-oauth/google`.
+React 18 · TypeScript (strict) · Vite 5 · React Router 6 · **Ant Design v5** ·
+`@ant-design/icons` · Zustand · Recharts · Axios · `@react-oauth/google`.
 
 ## Deployment
 
-`npm run build` emits a static `dist/` suitable for **Cloud Run** (served by a lightweight
-static container, e.g. nginx). Because it's an SPA, configure a fallback rewrite to
-`/index.html` for client-side routing.
+`npm run build` emits a static `dist/`. `Dockerfile` builds it into an nginx container for
+**Cloud Run** (`nginx.conf` includes the SPA fallback rewrite to `/index.html`), deployed by
+`.github/workflows/deploy-frontend.yml`.
 
 ---
 

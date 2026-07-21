@@ -1,13 +1,5 @@
-import {
-  Bar,
-  BarChart,
-  Cell,
-  LabelList,
-  ResponsiveContainer,
-  XAxis,
-  YAxis,
-} from 'recharts'
-import { ACCENT_HEX, ACCENT2_HEX } from '@/lib/constants'
+import { Bar, BarChart, LabelList, ResponsiveContainer, XAxis, YAxis } from 'recharts'
+import { ACCENT_HEX } from '@/lib/constants'
 import type { CategoryCount } from '@/types'
 
 export function FindingsByCategoryBar({ data }: { data: CategoryCount[] }) {
@@ -20,36 +12,26 @@ export function FindingsByCategoryBar({ data }: { data: CategoryCount[] }) {
         <BarChart
           data={rows}
           layout="vertical"
-          margin={{ top: 2, right: 28, bottom: 2, left: 8 }}
+          margin={{ top: 2, right: 30, bottom: 2, left: 4 }}
           barCategoryGap={9}
         >
-          <defs>
-            <linearGradient id="cat-grad" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stopColor={ACCENT_HEX} />
-              <stop offset="100%" stopColor={ACCENT2_HEX} />
-            </linearGradient>
-          </defs>
           <XAxis type="number" domain={[0, max]} hide />
           <YAxis
             type="category"
             dataKey="category"
-            width={150}
+            width={130}
             tickLine={false}
             axisLine={false}
-            tick={{ fontSize: 11, fill: 'rgb(147 161 189)' }}
+            tick={{ fontSize: 12, fill: 'rgba(0, 0, 0, 0.65)' }}
           />
-          <Bar dataKey="count" radius={[4, 4, 4, 4]} fill="url(#cat-grad)" maxBarSize={16}>
-            {rows.map((_, i) => (
-              <Cell key={i} />
-            ))}
-            <LabelList
-              dataKey="count"
-              position="right"
-              className="nums"
-              fill="rgb(231 238 248)"
-              fontSize={11}
-              fontFamily="JetBrains Mono"
-            />
+          <Bar
+            dataKey="count"
+            radius={[4, 4, 4, 4]}
+            fill={ACCENT_HEX}
+            maxBarSize={16}
+            isAnimationActive={false}
+          >
+            <LabelList dataKey="count" position="right" fill="rgba(0, 0, 0, 0.65)" fontSize={12} />
           </Bar>
         </BarChart>
       </ResponsiveContainer>
