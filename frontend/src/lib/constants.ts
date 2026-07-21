@@ -1,78 +1,36 @@
 import type { PhaseKey, ScanStatus, ScanType, Severity } from '@/types'
-import type { IconName } from '@/components/ui/Icon'
 
 // ── Severity ──────────────────────────────────────────────
 export interface SeverityMeta {
   label: string
+  /** Chart fill colour. */
   hex: string
+  /** antd Tag preset colour. */
+  tag: string
   rank: number
-  text: string
-  bg: string
-  border: string
-  dot: string
 }
 
 export const SEVERITY_META: Record<Severity, SeverityMeta> = {
-  critical: {
-    label: 'Critical',
-    hex: '#FF3D71',
-    rank: 5,
-    text: 'text-critical',
-    bg: 'bg-critical/12',
-    border: 'border-critical/40',
-    dot: 'bg-critical',
-  },
-  high: {
-    label: 'High',
-    hex: '#FF8A3D',
-    rank: 4,
-    text: 'text-high',
-    bg: 'bg-high/12',
-    border: 'border-high/40',
-    dot: 'bg-high',
-  },
-  medium: {
-    label: 'Medium',
-    hex: '#FFC73D',
-    rank: 3,
-    text: 'text-medium',
-    bg: 'bg-medium/12',
-    border: 'border-medium/40',
-    dot: 'bg-medium',
-  },
-  low: {
-    label: 'Low',
-    hex: '#2FE6A0',
-    rank: 2,
-    text: 'text-low',
-    bg: 'bg-low/12',
-    border: 'border-low/40',
-    dot: 'bg-low',
-  },
-  info: {
-    label: 'Info',
-    hex: '#54A8FF',
-    rank: 1,
-    text: 'text-info',
-    bg: 'bg-info/12',
-    border: 'border-info/40',
-    dot: 'bg-info',
-  },
+  critical: { label: 'Critical', hex: '#cf1322', tag: 'red', rank: 5 },
+  high: { label: 'High', hex: '#fa541c', tag: 'volcano', rank: 4 },
+  medium: { label: 'Medium', hex: '#faad14', tag: 'gold', rank: 3 },
+  low: { label: 'Low', hex: '#52c41a', tag: 'green', rank: 2 },
+  info: { label: 'Info', hex: '#1677ff', tag: 'blue', rank: 1 },
 }
 
 export const SEVERITY_ORDER: Severity[] = ['critical', 'high', 'medium', 'low', 'info']
 
-export const ACCENT_HEX = '#38E1E8'
-export const ACCENT2_HEX = '#4F7DFF'
+export const ACCENT_HEX = '#1677ff'
+export const ACCENT2_HEX = '#69b1ff'
 
 // ── Scan type ─────────────────────────────────────────────
 export interface ScanTypeMeta {
   label: string
   tagline: string
   description: string
-  icon: IconName
   estMinutes: string
   policy: string
+  tag: string
 }
 
 export const SCAN_TYPE_META: Record<ScanType, ScanTypeMeta> = {
@@ -80,80 +38,70 @@ export const SCAN_TYPE_META: Record<ScanType, ScanTypeMeta> = {
     label: 'Baseline',
     tagline: 'Passive · safe',
     description: 'Passive spider + alert baseline. No active payloads sent to the target.',
-    icon: 'radar',
     estMinutes: '~3 min',
     policy: 'ZAP Baseline',
+    tag: 'green',
   },
   quick: {
     label: 'Quick',
     tagline: 'Light active',
     description: 'Spider plus a fast active scan of the most common injection points.',
-    icon: 'zap',
     estMinutes: '~8 min',
     policy: 'ZAP Quick',
+    tag: 'blue',
   },
   full: {
     label: 'Full DAST',
     tagline: 'Deep · active',
     description: 'AJAX spider, full active scan, AI CVE matching and exploit validation.',
-    icon: 'target',
     estMinutes: '~25 min',
     policy: 'ZAP Full + Exploit',
+    tag: 'volcano',
   },
   api: {
     label: 'API Scan',
     tagline: 'OpenAPI aware',
     description: 'Import an OpenAPI/GraphQL definition and fuzz every documented endpoint.',
-    icon: 'layers',
     estMinutes: '~12 min',
     policy: 'ZAP API',
+    tag: 'geekblue',
   },
 }
 
-// ── Lifecycle phases (stepper / status) ───────────────────
+export const SCAN_TYPES: ScanType[] = ['baseline', 'quick', 'full', 'api']
+
+// ── Lifecycle phases (antd Steps) ─────────────────────────
 export interface PhaseMeta {
   key: PhaseKey
   label: string
-  short: string
   description: string
-  icon: IconName
 }
 
 export const PHASES: PhaseMeta[] = [
   {
     key: 'provisioning',
     label: 'Provisioning',
-    short: 'Provision',
     description: 'Spinning up an ephemeral Cloud Run job from the registry.',
-    icon: 'server',
   },
   {
     key: 'scanning',
     label: 'Scanning',
-    short: 'Scan',
     description: 'OWASP ZAP runs active & passive scans against the target.',
-    icon: 'radar',
   },
   {
     key: 'analyzing',
     label: 'AI Analysis',
-    short: 'Analyze',
     description: 'Vertex AI matches raw findings to known CVEs.',
-    icon: 'sparkles',
   },
   {
     key: 'validating',
     label: 'Validation',
-    short: 'Validate',
     description: 'Exploit scripts confirm vulnerabilities and cut false positives.',
-    icon: 'flask',
   },
   {
     key: 'reporting',
     label: 'Reporting',
-    short: 'Report',
     description: 'Aggregating results and tearing the container back down.',
-    icon: 'file',
   },
 ]
 
@@ -170,11 +118,20 @@ export const PHASE_FLOW: PhaseKey[] = [
 // ── Status ────────────────────────────────────────────────
 export interface StatusMeta {
   label: string
-  text: string
-  bg: string
-  border: string
-  dot: string
-  pulse: boolean
+  /** antd Tag colour (preset or status keyword). */
+  color: string
+}
+
+export const STATUS_META: Record<ScanStatus, StatusMeta> = {
+  queued: { label: 'Queued', color: 'default' },
+  provisioning: { label: 'Provisioning', color: 'processing' },
+  scanning: { label: 'Scanning', color: 'processing' },
+  analyzing: { label: 'AI Analysis', color: 'processing' },
+  validating: { label: 'Validating', color: 'processing' },
+  reporting: { label: 'Reporting', color: 'processing' },
+  completed: { label: 'Completed', color: 'success' },
+  failed: { label: 'Failed', color: 'error' },
+  canceled: { label: 'Canceled', color: 'default' },
 }
 
 const RUNNING_STATUSES: ScanStatus[] = [
@@ -188,81 +145,6 @@ const RUNNING_STATUSES: ScanStatus[] = [
 
 export function isRunning(status: ScanStatus): boolean {
   return RUNNING_STATUSES.includes(status)
-}
-
-export const STATUS_META: Record<ScanStatus, StatusMeta> = {
-  queued: {
-    label: 'Queued',
-    text: 'text-muted',
-    bg: 'bg-faint/10',
-    border: 'border-line-strong',
-    dot: 'bg-faint',
-    pulse: false,
-  },
-  provisioning: {
-    label: 'Provisioning',
-    text: 'text-accent',
-    bg: 'bg-accent/10',
-    border: 'border-accent/40',
-    dot: 'bg-accent',
-    pulse: true,
-  },
-  scanning: {
-    label: 'Scanning',
-    text: 'text-accent',
-    bg: 'bg-accent/10',
-    border: 'border-accent/40',
-    dot: 'bg-accent',
-    pulse: true,
-  },
-  analyzing: {
-    label: 'AI Analysis',
-    text: 'text-accent',
-    bg: 'bg-accent/10',
-    border: 'border-accent/40',
-    dot: 'bg-accent',
-    pulse: true,
-  },
-  validating: {
-    label: 'Validating',
-    text: 'text-accent',
-    bg: 'bg-accent/10',
-    border: 'border-accent/40',
-    dot: 'bg-accent',
-    pulse: true,
-  },
-  reporting: {
-    label: 'Reporting',
-    text: 'text-accent',
-    bg: 'bg-accent/10',
-    border: 'border-accent/40',
-    dot: 'bg-accent',
-    pulse: true,
-  },
-  completed: {
-    label: 'Completed',
-    text: 'text-low',
-    bg: 'bg-low/12',
-    border: 'border-low/40',
-    dot: 'bg-low',
-    pulse: false,
-  },
-  failed: {
-    label: 'Failed',
-    text: 'text-critical',
-    bg: 'bg-critical/12',
-    border: 'border-critical/40',
-    dot: 'bg-critical',
-    pulse: false,
-  },
-  canceled: {
-    label: 'Canceled',
-    text: 'text-muted',
-    bg: 'bg-faint/10',
-    border: 'border-line-strong',
-    dot: 'bg-faint',
-    pulse: false,
-  },
 }
 
 export const APP_NAME = 'Sandbox Playground'

@@ -1,38 +1,37 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { ArrowLeftOutlined, FileTextOutlined, StopOutlined } from '@ant-design/icons'
+import { Button, Card, Flex, Popconfirm, Progress, Result, Space, Steps, Tag, Typography } from 'antd'
 import { api, type StatusPayload } from '@/api'
 import { useScansStore } from '@/store/scansStore'
-import { toast } from '@/store/uiStore'
-import { cn } from '@/lib/cn'
-import { isRunning, SCAN_TYPE_META, STATUS_META } from '@/lib/constants'
+import { toast } from '@/lib/notify'
+import { isRunning, PHASES, SCAN_TYPE_META, STATUS_META } from '@/lib/constants'
 import { formatClock, formatDuration, formatRelativeTime } from '@/lib/format'
+import { SeverityBar } from '@/components/charts/SeverityBar'
 import type { ScanEvent } from '@/types'
-import { Button } from '@/components/ui/Button'
-import { Card } from '@/components/ui/Card'
-import { Icon } from '@/components/ui/Icon'
-import { StatusBadge } from '@/components/ui/Badge'
-import { ProgressBar } from '@/components/ui/ProgressBar'
-import { LoaderBlock } from '@/components/ui/Spinner'
-import { EmptyState } from '@/components/ui/EmptyState'
-import { Modal } from '@/components/ui/Modal'
-import { PhaseStepper } from '@/components/scans/PhaseStepper'
-import { SeverityBar } from '@/components/dashboard/SeverityBar'
 
 const TERMINAL = ['completed', 'failed', 'canceled']
 
-const LEVEL_STYLE: Record<ScanEvent['level'], { text: string; glyph: string }> = {
-  info: { text: 'text-muted', glyph: '›' },
-  success: { text: 'text-low', glyph: '✓' },
-  warn: { text: 'text-medium', glyph: '⚠' },
-  error: { text: 'text-critical', glyph: '✗' },
+const LEVEL_COLOR: Record<ScanEvent['level'], string> = {
+  info: 'rgba(0, 0, 0, 0.65)',
+  success: '#52c41a',
+  warn: '#faad14',
+  error: '#cf1322',
+}
+
+const LEVEL_GLYPH: Record<ScanEvent['level'], string> = {
+  info: '›',
+  success: '✓',
+  warn: '⚠',
+  error: '✗',
 }
 
 export default function ScanStatus() {
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const upsert = useScansStore((s) => s.upsert)
   const [data, setData] = useState<StatusPayload | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [confirmCancel, setConfirmCancel] = useState(false)
   const logRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -63,14 +62,13 @@ export default function ScanStatus() {
     }
   }, [id, upsert])
 
-  // Auto-scroll the log as new lines stream in.
+  // Keep the log pinned to the newest line.
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight
   }, [data?.events.length])
 
   const handleCancel = async () => {
     if (!id) return
-    setConfirmCancel(false)
     try {
       const scan = await api.cancelScan(id)
       upsert(scan)
@@ -83,167 +81,155 @@ export default function ScanStatus() {
 
   if (error) {
     return (
-      <div className="panel">
-        <EmptyState
-          icon="alert-triangle"
-          title="Scan not found"
-          description={error}
-          action={
-            <Button to="/scans" variant="secondary" iconLeft="arrow-left">
-              Back to scans
-            </Button>
-          }
-        />
-      </div>
+      <Result
+        status="404"
+        title="Scan not found"
+        subTitle={error}
+        extra={
+          <Button type="primary" onClick={() => navigate('/scans')}>
+            Back to scans
+          </Button>
+        }
+      />
     )
   }
 
-  if (!data) return <LoaderBlock label="Connecting to scan…" />
+  if (!data) return <Card loading />
 
   const { scan, events } = data
   const running = isRunning(scan.status)
-  const meta = SCAN_TYPE_META[scan.scanType]
   const done = scan.status === 'completed'
+  const meta = SCAN_TYPE_META[scan.scanType]
+
+  const phaseIndex = done
+    ? PHASES.length
+    : Math.max(
+        0,
+        PHASES.findIndex((p) => p.key === scan.phase),
+      )
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <Link to="/scans" className="eyebrow mb-2 inline-flex items-center gap-1.5 hover:text-accent">
-            <Icon name="arrow-left" size={13} /> Scans
+    <Space direction="vertical" size="large" style={{ width: '100%' }}>
+      <Flex wrap gap={16} align="flex-end" justify="space-between">
+        <div style={{ minWidth: 0 }}>
+          <Link to="/scans">
+            <ArrowLeftOutlined /> Scans
           </Link>
-          <h2 className="truncate font-display text-2xl font-bold text-ink">{scan.name}</h2>
-          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-xs text-muted">
-            <span className="flex items-center gap-1.5">
-              <Icon name="globe" size={13} className="text-faint" />
-              {scan.target}
-            </span>
-            <span className="size-0.5 rounded-full bg-faint" />
-            <span>{meta.label}</span>
-            <span className="size-0.5 rounded-full bg-faint" />
-            <span>{scan.region}</span>
-          </div>
+          <Typography.Title level={4} style={{ margin: '8px 0 4px' }}>
+            {scan.name}
+          </Typography.Title>
+          <Typography.Text type="secondary" style={{ wordBreak: 'break-all' }}>
+            {scan.target} · {meta.label} · {scan.region}
+          </Typography.Text>
         </div>
-        <div className="flex items-center gap-3">
-          <StatusBadge status={scan.status} />
+        <Space wrap>
+          <Tag color={STATUS_META[scan.status].color}>{STATUS_META[scan.status].label}</Tag>
           {running && (
-            <Button variant="danger" size="sm" iconLeft="stop" onClick={() => setConfirmCancel(true)}>
-              Cancel
-            </Button>
+            <Popconfirm
+              title="Cancel this scan?"
+              description="The container is torn down immediately and partial results discarded."
+              okText="Cancel scan"
+              okButtonProps={{ danger: true }}
+              cancelText="Keep running"
+              onConfirm={handleCancel}
+            >
+              <Button danger icon={<StopOutlined />}>
+                Cancel
+              </Button>
+            </Popconfirm>
           )}
           {done && (
-            <Button to={`/scans/${scan.id}/report`} iconLeft="file" size="sm">
+            <Button
+              type="primary"
+              icon={<FileTextOutlined />}
+              onClick={() => navigate(`/scans/${scan.id}/report`)}
+            >
               View report
             </Button>
           )}
-        </div>
-      </div>
+        </Space>
+      </Flex>
 
-      {/* Completed banner */}
       {done && (
-        <Card className="border-low/30">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3">
-              <span className="grid size-11 place-items-center rounded-xl border border-low/40 bg-low/10 text-low">
-                <Icon name="check-circle" size={22} />
-              </span>
-              <div>
-                <div className="font-display font-semibold text-ink">Scan complete</div>
-                <div className="text-sm text-muted">
-                  {scan.totalFindings} findings · risk score {scan.riskScore} · {formatDuration(scan.durationSec)}
-                </div>
-              </div>
-            </div>
-            <div className="w-full sm:w-64">
+        <Card>
+          <Flex wrap gap={24} align="center" justify="space-between">
+            <Space direction="vertical" size={2}>
+              <Typography.Text strong>Scan complete</Typography.Text>
+              <Typography.Text type="secondary">
+                {scan.totalFindings} findings · risk score {scan.riskScore} ·{' '}
+                {formatDuration(scan.durationSec)}
+              </Typography.Text>
+            </Space>
+            <div style={{ minWidth: 220, flex: '1 1 220px' }}>
               <SeverityBar counts={scan.counts} showLegend />
             </div>
-          </div>
+          </Flex>
         </Card>
       )}
 
-      {/* Progress */}
       <Card>
-        <div className="mb-5 flex items-end justify-between">
-          <div>
-            <div className="eyebrow mb-1">{running ? 'In progress' : STATUS_META[scan.status].label}</div>
-            <div className="flex items-baseline gap-2">
-              <span className="nums font-display text-3xl font-bold text-ink">{scan.progress}</span>
-              <span className="font-mono text-sm text-faint">%</span>
-            </div>
-          </div>
-          <div className="text-right font-mono text-xs text-muted">
-            <div>started {formatRelativeTime(scan.startedAt)}</div>
-            {scan.durationSec != null && <div className="text-faint">took {formatDuration(scan.durationSec)}</div>}
-          </div>
-        </div>
-        <ProgressBar value={scan.progress} indeterminate={running && scan.progress < 2} height={10} />
-        <div className="mt-7">
-          <PhaseStepper phase={scan.phase} status={scan.status} />
+        <Flex wrap gap={16} align="baseline" justify="space-between" style={{ marginBottom: 16 }}>
+          <Typography.Text type="secondary">
+            {running ? 'In progress' : STATUS_META[scan.status].label}
+          </Typography.Text>
+          <Typography.Text type="secondary">
+            started {formatRelativeTime(scan.startedAt)}
+            {scan.durationSec != null && ` · took ${formatDuration(scan.durationSec)}`}
+          </Typography.Text>
+        </Flex>
+
+        <Progress
+          percent={scan.progress}
+          status={
+            scan.status === 'failed'
+              ? 'exception'
+              : done
+                ? 'success'
+                : running
+                  ? 'active'
+                  : 'normal'
+          }
+        />
+
+        <div style={{ marginTop: 24 }}>
+          <Steps
+            size="small"
+            current={phaseIndex}
+            status={scan.status === 'failed' ? 'error' : undefined}
+            items={PHASES.map((p) => ({ title: p.label, description: p.description }))}
+          />
         </div>
       </Card>
 
-      {/* Live log */}
       <Card
         title="Execution log"
-        icon="terminal"
-        eyebrow="Cloud Run job · live"
-        bodyClassName="p-0"
-        actions={
-          running ? (
-            <span className="flex items-center gap-1.5 font-mono text-[0.64rem] uppercase tracking-widest2 text-accent">
-              <span className="size-1.5 animate-pulse rounded-full bg-accent" /> streaming
-            </span>
-          ) : (
-            <span className="font-mono text-[0.64rem] uppercase tracking-widest2 text-faint">
-              {events.length} lines
-            </span>
-          )
+        extra={
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {running ? 'streaming' : `${events.length} lines`}
+          </Typography.Text>
         }
+        styles={{ body: { padding: 0 } }}
       >
-        <div ref={logRef} className="max-h-[22rem] overflow-y-auto scroll-smooth p-4 font-mono text-xs leading-relaxed">
-          {events.map((ev) => {
-            const ls = LEVEL_STYLE[ev.level]
-            return (
-              <div key={ev.id} className="flex gap-3 py-0.5">
-                <span className="shrink-0 text-faint">{formatClock(ev.ts)}</span>
-                <span className={cn('shrink-0', ls.text)}>{ls.glyph}</span>
-                <span className={cn('min-w-0', ev.level === 'info' ? 'text-ink/80' : ls.text)}>
-                  {ev.message}
-                </span>
-              </div>
-            )
-          })}
-          {running && (
-            <div className="flex gap-3 py-0.5 text-faint">
-              <span className="shrink-0">{formatClock(new Date().toISOString())}</span>
-              <span className="inline-block h-3.5 w-2 translate-y-0.5 bg-accent motion-safe:animate-blink" />
+        <div
+          ref={logRef}
+          className="mono"
+          style={{ maxHeight: 340, overflowY: 'auto', padding: 16, fontSize: 12, lineHeight: 1.9 }}
+        >
+          {events.map((ev) => (
+            <div key={ev.id} style={{ display: 'flex', gap: 10 }}>
+              <span style={{ color: 'rgba(0, 0, 0, 0.35)', flexShrink: 0 }}>
+                {formatClock(ev.ts)}
+              </span>
+              <span style={{ color: LEVEL_COLOR[ev.level], flexShrink: 0 }}>
+                {LEVEL_GLYPH[ev.level]}
+              </span>
+              <span style={{ color: LEVEL_COLOR[ev.level], minWidth: 0, wordBreak: 'break-word' }}>
+                {ev.message}
+              </span>
             </div>
-          )}
+          ))}
         </div>
       </Card>
-
-      <Modal
-        open={confirmCancel}
-        onClose={() => setConfirmCancel(false)}
-        eyebrow="Confirm"
-        title="Cancel this scan?"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setConfirmCancel(false)}>
-              Keep running
-            </Button>
-            <Button variant="danger" iconLeft="stop" onClick={handleCancel}>
-              Cancel scan
-            </Button>
-          </>
-        }
-      >
-        <p className="text-sm text-muted">
-          The ephemeral scanner container will be torn down immediately and partial results
-          discarded. This cannot be undone.
-        </p>
-      </Modal>
-    </div>
+    </Space>
   )
 }

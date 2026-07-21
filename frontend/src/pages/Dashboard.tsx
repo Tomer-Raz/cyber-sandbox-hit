@@ -1,19 +1,16 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import { AlertOutlined, BugOutlined, DashboardOutlined, PlusOutlined, RadarChartOutlined } from '@ant-design/icons'
+import { Button, Card, Col, Flex, Row, Space, Statistic, Typography } from 'antd'
 import { api } from '@/api'
 import { useAuth } from '@/auth/AuthContext'
 import { useScansStore } from '@/store/scansStore'
-import { isRunning } from '@/lib/constants'
+import { isRunning, SEVERITY_META } from '@/lib/constants'
 import type { DashboardStats } from '@/types'
-import { Button } from '@/components/ui/Button'
-import { Card } from '@/components/ui/Card'
-import { Icon } from '@/components/ui/Icon'
-import { Skeleton } from '@/components/ui/Skeleton'
-import { StatCard } from '@/components/dashboard/StatCard'
-import { SeverityBar } from '@/components/dashboard/SeverityBar'
+import { SeverityBar } from '@/components/charts/SeverityBar'
 import { SeverityDonut } from '@/components/charts/SeverityDonut'
 import { TrendArea } from '@/components/charts/TrendArea'
-import { ScanCard } from '@/components/scans/ScanCard'
+import { ScanTable } from '@/components/scans/ScanTable'
 
 function greeting(): string {
   const h = new Date().getHours()
@@ -24,6 +21,7 @@ function greeting(): string {
 
 export default function Dashboard() {
   const { user } = useAuth()
+  const navigate = useNavigate()
   const { scans, fetchScans, loaded } = useScansStore()
   const [stats, setStats] = useState<DashboardStats | null>(null)
 
@@ -46,101 +44,88 @@ export default function Dashboard() {
   })
 
   return (
-    <div className="space-y-8">
-      {/* Greeting */}
-      <div className="flex flex-wrap items-end justify-between gap-4">
+    <Space direction="vertical" size="large" style={{ width: '100%' }}>
+      <Flex wrap gap={16} align="flex-end" justify="space-between">
         <div>
-          <div className="eyebrow mb-1.5">{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</div>
-          <h2 className="font-display text-2xl font-bold text-ink sm:text-[1.7rem]">
+          <Typography.Title level={4} style={{ margin: 0 }}>
             {greeting()}, {user?.name.split(' ')[0]}
-          </h2>
-          <p className="mt-1 text-sm text-muted">
+          </Typography.Title>
+          <Typography.Text type="secondary">
             {running.length > 0
               ? `${running.length} scan${running.length > 1 ? 's' : ''} running right now.`
               : 'No active scans — your attack surface is quiet.'}
-          </p>
+          </Typography.Text>
         </div>
-        <div className="flex gap-2">
-          <Button to="/scans" variant="secondary" iconLeft="radar" size="md">
+        <Space wrap>
+          <Button icon={<RadarChartOutlined />} onClick={() => navigate('/scans')}>
             All scans
           </Button>
-          <Button to="/scans/new" iconLeft="plus" size="md">
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/scans/new')}>
             New scan
           </Button>
-        </div>
-      </div>
+        </Space>
+      </Flex>
 
-      {/* KPIs */}
-      {stats ? (
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <StatCard label="Total scans" value={stats.totalScans} icon="radar" hint={`${stats.completedScans} completed`} delay={0} />
-          <StatCard label="Findings" value={stats.totalFindings} icon="bug" hint="across completed scans" delay={70} />
-          <StatCard label="Critical" value={stats.criticalFindings} icon="alert-octagon" tone="critical" hint="need immediate action" delay={140} />
-          <StatCard label="Avg risk score" value={stats.avgRiskScore} icon="gauge" tone="medium" suffix="/100" delay={210} />
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-[124px]" />
-          ))}
-        </div>
-      )}
+      <Row gutter={[16, 16]}>
+        <Col xs={12} md={6}>
+          <Card loading={!stats}>
+            <Statistic
+              title="Total scans"
+              value={stats?.totalScans ?? 0}
+              prefix={<RadarChartOutlined />}
+            />
+          </Card>
+        </Col>
+        <Col xs={12} md={6}>
+          <Card loading={!stats}>
+            <Statistic title="Findings" value={stats?.totalFindings ?? 0} prefix={<BugOutlined />} />
+          </Card>
+        </Col>
+        <Col xs={12} md={6}>
+          <Card loading={!stats}>
+            <Statistic
+              title="Critical"
+              value={stats?.criticalFindings ?? 0}
+              prefix={<AlertOutlined />}
+              valueStyle={{ color: SEVERITY_META.critical.hex }}
+            />
+          </Card>
+        </Col>
+        <Col xs={12} md={6}>
+          <Card loading={!stats}>
+            <Statistic
+              title="Avg risk score"
+              value={stats?.avgRiskScore ?? 0}
+              suffix="/ 100"
+              prefix={<DashboardOutlined />}
+            />
+          </Card>
+        </Col>
+      </Row>
 
-      {/* Trend + severity mix */}
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card
-          title="Findings activity"
-          eyebrow="Last 7 days"
-          icon="trending-up"
-          className="lg:col-span-2"
-          actions={
-            <span className="font-mono text-[0.66rem] uppercase tracking-widest2 text-faint">
-              findings / day
-            </span>
-          }
-        >
-          {stats ? <TrendArea data={stats.trend} /> : <Skeleton className="h-[180px]" />}
-        </Card>
+      <Row gutter={[16, 16]}>
+        <Col xs={24} lg={16}>
+          <Card title="Findings activity" loading={!stats}>
+            {stats && <TrendArea data={stats.trend} />}
+          </Card>
+        </Col>
+        <Col xs={24} lg={8}>
+          <Card title="Severity mix" loading={!stats}>
+            {stats && (
+              <>
+                <SeverityDonut counts={stats.severityTotals} size={180} />
+                <div style={{ marginTop: 16 }}>
+                  <SeverityBar counts={stats.severityTotals} showLegend />
+                </div>
+              </>
+            )}
+          </Card>
+        </Col>
+      </Row>
 
-        <Card title="Severity mix" eyebrow="All findings" icon="layers">
-          {stats ? (
-            <>
-              <SeverityDonut counts={stats.severityTotals} size={180} />
-              <SeverityBar counts={stats.severityTotals} showLegend className="mt-4" />
-            </>
-          ) : (
-            <Skeleton className="mx-auto h-[180px] w-[180px] rounded-full" />
-          )}
-        </Card>
-      </div>
-
-      {/* Recent scans */}
-      <div>
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="flex items-center gap-2 font-display text-lg font-semibold text-ink">
-            <Icon name="activity" size={18} className="text-accent" />
-            Recent scans
-          </h3>
-          <Link to="/scans" className="group flex items-center gap-1 text-sm text-muted transition-colors hover:text-accent">
-            View all
-            <Icon name="arrow-right" size={15} className="transition-transform group-hover:translate-x-0.5" />
-          </Link>
-        </div>
-
-        {!loaded ? (
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-[188px]" />
-            ))}
-          </div>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {recent.slice(0, 6).map((scan, i) => (
-              <ScanCard key={scan.id} scan={scan} index={i} />
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
+      <Card title="Recent scans" extra={<Link to="/scans">View all</Link>}>
+        <ScanTable data={recent.slice(0, 6)} loading={!loaded} />
+      </Card>
+    </Space>
   )
 }

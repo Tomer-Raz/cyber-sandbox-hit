@@ -1,28 +1,54 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { PlayCircleOutlined } from '@ant-design/icons'
+import { Button, Card, Checkbox, Col, Form, Input, Row, Select, Space, Switch, Typography } from 'antd'
 import { api } from '@/api'
 import { useScansStore } from '@/store/scansStore'
-import { toast } from '@/store/uiStore'
-import { cn } from '@/lib/cn'
-import { SCAN_TYPE_META } from '@/lib/constants'
+import { toast } from '@/lib/notify'
+import { SCAN_TYPE_META, SCAN_TYPES } from '@/lib/constants'
 import type { ScanOptions, ScanType } from '@/types'
-import { Button } from '@/components/ui/Button'
-import { Card } from '@/components/ui/Card'
-import { Icon } from '@/components/ui/Icon'
-import { Field, Input, Select, Switch } from '@/components/ui/Field'
 
-const SCAN_TYPES: ScanType[] = ['baseline', 'quick', 'full', 'api']
+interface FormValues extends ScanOptions {
+  target: string
+  name: string
+  scanType: ScanType
+  authorized: boolean
+}
 
 function defaultsFor(type: ScanType): ScanOptions {
   switch (type) {
     case 'baseline':
-      return { activeScan: false, ajaxSpider: false, aiCveMatching: true, exploitValidation: false, maxDepth: 3 }
+      return {
+        activeScan: false,
+        ajaxSpider: false,
+        aiCveMatching: true,
+        exploitValidation: false,
+        maxDepth: 3,
+      }
     case 'quick':
-      return { activeScan: true, ajaxSpider: false, aiCveMatching: true, exploitValidation: false, maxDepth: 4 }
+      return {
+        activeScan: true,
+        ajaxSpider: false,
+        aiCveMatching: true,
+        exploitValidation: false,
+        maxDepth: 4,
+      }
     case 'api':
-      return { activeScan: true, ajaxSpider: false, aiCveMatching: true, exploitValidation: true, maxDepth: 6 }
+      return {
+        activeScan: true,
+        ajaxSpider: false,
+        aiCveMatching: true,
+        exploitValidation: true,
+        maxDepth: 6,
+      }
     default:
-      return { activeScan: true, ajaxSpider: true, aiCveMatching: true, exploitValidation: true, maxDepth: 5 }
+      return {
+        activeScan: true,
+        ajaxSpider: true,
+        aiCveMatching: true,
+        exploitValidation: true,
+        maxDepth: 5,
+      }
   }
 }
 
@@ -30,48 +56,50 @@ const isValidTarget = (t: string) =>
   /^(https?:\/\/)?([\w-]+\.)+[\w-]+(:\d+)?(\/\S*)?$/i.test(t.trim()) ||
   /^(\d{1,3}\.){3}\d{1,3}(:\d+)?$/.test(t.trim())
 
-const OPTION_DEFS: { key: keyof ScanOptions; label: string; desc: string; icon: 'zap' | 'scan' | 'sparkles' | 'flask' }[] = [
-  { key: 'activeScan', label: 'Active scan', desc: 'Send live injection payloads to the target', icon: 'zap' },
-  { key: 'ajaxSpider', label: 'AJAX spider', desc: 'Crawl JavaScript-rendered routes', icon: 'scan' },
-  { key: 'aiCveMatching', label: 'AI CVE matching', desc: 'Correlate findings via Vertex AI', icon: 'sparkles' },
-  { key: 'exploitValidation', label: 'Exploit validation', desc: 'Confirm vulnerabilities, cut false positives', icon: 'flask' },
+const OPTION_DEFS: { key: keyof ScanOptions; label: string; description: string }[] = [
+  { key: 'activeScan', label: 'Active scan', description: 'Send live injection payloads to the target' },
+  { key: 'ajaxSpider', label: 'AJAX spider', description: 'Crawl JavaScript-rendered routes' },
+  { key: 'aiCveMatching', label: 'AI CVE matching', description: 'Correlate findings via Vertex AI' },
+  {
+    key: 'exploitValidation',
+    label: 'Exploit validation',
+    description: 'Confirm vulnerabilities, cut false positives',
+  },
 ]
 
 export default function NewScan() {
+  const [form] = Form.useForm<FormValues>()
   const navigate = useNavigate()
   const upsert = useScansStore((s) => s.upsert)
-
-  const [target, setTarget] = useState('')
-  const [name, setName] = useState('')
-  const [scanType, setScanType] = useState<ScanType>('full')
-  const [options, setOptions] = useState<ScanOptions>(defaultsFor('full'))
-  const [authorized, setAuthorized] = useState(false)
   const [submitting, setSubmitting] = useState(false)
-  const [errors, setErrors] = useState<{ target?: string; authorized?: string }>({})
 
-  const selectType = (t: ScanType) => {
-    setScanType(t)
-    setOptions(defaultsFor(t))
+  const scanType = Form.useWatch('scanType', form) ?? 'full'
+  const meta = SCAN_TYPE_META[scanType]
+
+  const initialValues: FormValues = {
+    target: '',
+    name: '',
+    scanType: 'full',
+    authorized: false,
+    ...defaultsFor('full'),
   }
 
-  const setOption = (key: keyof ScanOptions, value: boolean) =>
-    setOptions((o) => ({ ...o, [key]: value }))
-
-  const meta = SCAN_TYPE_META[scanType]
-  const enabledOptions = OPTION_DEFS.filter((o) => options[o.key])
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    const next: typeof errors = {}
-    if (!target.trim()) next.target = 'A target URL or IP is required'
-    else if (!isValidTarget(target)) next.target = 'Enter a valid URL, domain, or IP address'
-    if (!authorized) next.authorized = 'You must confirm authorization to scan this target'
-    setErrors(next)
-    if (Object.keys(next).length) return
-
+  const onFinish = async (v: FormValues) => {
     setSubmitting(true)
     try {
-      const scan = await api.createScan({ name: name.trim(), target: target.trim(), scanType, options, authorized })
+      const scan = await api.createScan({
+        name: v.name?.trim() ?? '',
+        target: v.target.trim(),
+        scanType: v.scanType,
+        options: {
+          activeScan: v.activeScan,
+          ajaxSpider: v.ajaxSpider,
+          aiCveMatching: v.aiCveMatching,
+          exploitValidation: v.exploitValidation,
+          maxDepth: v.maxDepth,
+        },
+        authorized: v.authorized,
+      })
       upsert(scan)
       toast.success('Scan queued', `${meta.label} scan launched against ${scan.target}`)
       navigate(`/scans/${scan.id}`)
@@ -82,198 +110,121 @@ export default function NewScan() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="grid gap-6 lg:grid-cols-[1fr_340px]">
-      {/* ── Main column ── */}
-      <div className="space-y-6">
-        <Card title="Target" eyebrow="Step 1" icon="target">
-          <Field
+    <Form
+      form={form}
+      layout="vertical"
+      initialValues={initialValues}
+      onFinish={onFinish}
+      requiredMark="optional"
+      style={{ maxWidth: 760 }}
+    >
+      <Space direction="vertical" size="large" style={{ width: '100%' }}>
+        <Card title="Target">
+          <Form.Item
+            name="target"
             label="URL, domain, or IP address"
-            htmlFor="target"
-            required
-            error={errors.target}
-            hint="The system or application you are authorized to test."
+            extra="The system or application you are authorized to test."
+            rules={[
+              { required: true, message: 'A target URL or IP is required' },
+              {
+                validator: (_, value: string) =>
+                  !value || isValidTarget(value)
+                    ? Promise.resolve()
+                    : Promise.reject(new Error('Enter a valid URL, domain, or IP address')),
+              },
+            ]}
           >
-            <Input
-              id="target"
-              value={target}
-              onChange={(e) => setTarget(e.target.value)}
-              placeholder="https://staging.acme-demo.com"
-              autoFocus
-              spellCheck={false}
-              className="font-mono"
-            />
-          </Field>
-          <Field label="Scan name" htmlFor="name" hint="Optional — a friendly label for this run." className="mt-4">
-            <Input
-              id="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Production storefront — full sweep"
-            />
-          </Field>
+            <Input placeholder="https://staging.acme-demo.com" autoFocus spellCheck={false} />
+          </Form.Item>
+
+          <Form.Item name="name" label="Scan name" extra="Optional — a friendly label for this run.">
+            <Input placeholder="e.g. Production storefront — full sweep" />
+          </Form.Item>
         </Card>
 
-        <Card title="Scan profile" eyebrow="Step 2" icon="sliders">
-          <div className="grid gap-3 sm:grid-cols-2">
-            {SCAN_TYPES.map((t) => {
-              const m = SCAN_TYPE_META[t]
-              const active = scanType === t
-              return (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => selectType(t)}
-                  className={cn(
-                    'group relative flex flex-col gap-2 rounded-xl border p-4 text-left transition-all',
-                    active
-                      ? 'border-accent/50 bg-accent/5 shadow-glow-sm'
-                      : 'border-line bg-surface-2/40 hover:border-line-strong',
-                  )}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className={cn('grid size-9 place-items-center rounded-lg border', active ? 'border-accent/40 bg-accent/15 text-accent' : 'border-line bg-surface-3 text-muted')}>
-                      <Icon name={m.icon} size={18} />
-                    </span>
-                    <span
-                      className={cn(
-                        'grid size-5 place-items-center rounded-full border transition-colors',
-                        active ? 'border-accent bg-accent text-bg' : 'border-line-strong',
-                      )}
-                    >
-                      {active && <Icon name="check" size={13} />}
-                    </span>
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-display text-sm font-semibold text-ink">{m.label}</span>
-                      <span className="font-mono text-[0.6rem] uppercase tracking-wider text-faint">{m.tagline}</span>
-                    </div>
-                    <p className="mt-1 text-xs leading-relaxed text-muted">{m.description}</p>
-                  </div>
-                  <div className="mt-auto flex items-center gap-1.5 pt-1 font-mono text-[0.66rem] text-faint">
-                    <Icon name="clock" size={12} /> {m.estMinutes}
-                  </div>
-                </button>
-              )
-            })}
-          </div>
-        </Card>
-
-        <Card title="Engine options" eyebrow="Step 3" icon="cpu">
-          <div className="grid gap-3 sm:grid-cols-2">
-            {OPTION_DEFS.map((o) => (
-              <Switch
-                key={o.key}
-                checked={Boolean(options[o.key])}
-                onChange={(v) => setOption(o.key, v)}
-                label={o.label}
-                description={o.desc}
-                icon={<Icon name={o.icon} size={17} />}
-              />
-            ))}
-          </div>
-          <Field label="Crawl depth" htmlFor="depth" className="mt-4 max-w-[12rem]">
+        <Card title="Scan profile">
+          <Form.Item name="scanType" label="Profile">
             <Select
-              id="depth"
-              value={options.maxDepth}
-              onChange={(e) => setOptions((s) => ({ ...s, maxDepth: Number(e.target.value) }))}
-            >
-              {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-                <option key={n} value={n}>
-                  {n} {n === 1 ? 'level' : 'levels'}
-                </option>
-              ))}
-            </Select>
-          </Field>
+              onChange={(type: ScanType) => form.setFieldsValue(defaultsFor(type))}
+              options={SCAN_TYPES.map((t) => ({
+                value: t,
+                label: `${SCAN_TYPE_META[t].label} · ${SCAN_TYPE_META[t].tagline}`,
+              }))}
+            />
+          </Form.Item>
+          <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+            {meta.description}
+            <br />
+            Policy <Typography.Text code>{meta.policy}</Typography.Text> · estimated{' '}
+            {meta.estMinutes}
+          </Typography.Paragraph>
         </Card>
-      </div>
 
-      {/* ── Summary rail ── */}
-      <div className="lg:sticky lg:top-24 lg:self-start">
-        <Card title="Launch summary" eyebrow="Review" icon="play">
-          <dl className="space-y-3 text-sm">
-            <SummaryRow label="Target">
-              <span className="break-all font-mono text-xs text-ink">{target || '—'}</span>
-            </SummaryRow>
-            <SummaryRow label="Profile">
-              <span className="text-ink">{meta.label}</span>
-            </SummaryRow>
-            <SummaryRow label="Policy">
-              <span className="font-mono text-xs text-muted">{meta.policy}</span>
-            </SummaryRow>
-            <SummaryRow label="Est. duration">
-              <span className="text-ink">{meta.estMinutes}</span>
-            </SummaryRow>
-          </dl>
+        <Card title="Engine options">
+          <Row gutter={[16, 0]}>
+            {OPTION_DEFS.map((o) => (
+              <Col xs={24} sm={12} key={o.key}>
+                <Form.Item
+                  name={o.key}
+                  label={o.label}
+                  valuePropName="checked"
+                  extra={o.description}
+                >
+                  <Switch />
+                </Form.Item>
+              </Col>
+            ))}
+          </Row>
 
-          <div className="mt-4 border-t border-line/60 pt-4">
-            <div className="eyebrow mb-2">Enabled</div>
-            <div className="flex flex-wrap gap-1.5">
-              {enabledOptions.length === 0 ? (
-                <span className="text-xs text-faint">Passive only</span>
-              ) : (
-                enabledOptions.map((o) => (
-                  <span
-                    key={o.key}
-                    className="flex items-center gap-1 rounded-full border border-line bg-surface-2 px-2 py-1 text-[0.66rem] text-muted"
-                  >
-                    <Icon name={o.icon} size={11} className="text-accent" />
-                    {o.label}
-                  </span>
-                ))
-              )}
-            </div>
-          </div>
+          <Form.Item name="maxDepth" label="Crawl depth" style={{ maxWidth: 200 }}>
+            <Select
+              options={Array.from({ length: 10 }, (_, i) => ({
+                value: i + 1,
+                label: `${i + 1} ${i === 0 ? 'level' : 'levels'}`,
+              }))}
+            />
+          </Form.Item>
+        </Card>
 
-          {/* Authorization */}
-          <button
-            type="button"
-            onClick={() => {
-              setAuthorized((a) => !a)
-              setErrors((e) => ({ ...e, authorized: undefined }))
-            }}
-            className={cn(
-              'mt-4 flex w-full items-start gap-2.5 rounded-xl border p-3 text-left transition-colors',
-              authorized ? 'border-low/40 bg-low/5' : errors.authorized ? 'border-critical/50 bg-critical/5' : 'border-line bg-surface-2/50',
-            )}
+        <Card>
+          <Form.Item
+            name="authorized"
+            valuePropName="checked"
+            rules={[
+              {
+                validator: (_, value: boolean) =>
+                  value
+                    ? Promise.resolve()
+                    : Promise.reject(
+                        new Error('You must confirm authorization to scan this target'),
+                      ),
+              },
+            ]}
           >
-            <span
-              className={cn(
-                'mt-0.5 grid size-5 shrink-0 place-items-center rounded-md border transition-colors',
-                authorized ? 'border-low bg-low text-bg' : 'border-line-strong',
-              )}
-            >
-              {authorized && <Icon name="check" size={13} />}
-            </span>
-            <span className="text-xs leading-relaxed text-muted">
-              I confirm I am <span className="text-ink">authorized</span> to perform security testing
-              against this target.
-            </span>
-          </button>
-          {errors.authorized && (
-            <p className="mt-1.5 flex items-center gap-1.5 text-xs text-critical">
-              <Icon name="alert-triangle" size={13} />
-              {errors.authorized}
-            </p>
-          )}
+            <Checkbox>
+              I confirm I am <strong>authorized</strong> to perform security testing against this
+              target.
+            </Checkbox>
+          </Form.Item>
 
-          <Button type="submit" fullWidth size="lg" loading={submitting} iconLeft="play" className="mt-4">
-            {submitting ? 'Launching…' : 'Launch scan'}
+          <Button
+            type="primary"
+            size="large"
+            htmlType="submit"
+            loading={submitting}
+            icon={<PlayCircleOutlined />}
+            block
+          >
+            Launch scan
           </Button>
-          <p className="mt-3 text-center text-[0.68rem] leading-relaxed text-faint">
+          <Typography.Paragraph
+            type="secondary"
+            style={{ fontSize: 12, textAlign: 'center', marginTop: 12, marginBottom: 0 }}
+          >
             An ephemeral container is provisioned for the scan and destroyed on completion.
-          </p>
+          </Typography.Paragraph>
         </Card>
-      </div>
-    </form>
-  )
-}
-
-function SummaryRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex items-start justify-between gap-3">
-      <dt className="shrink-0 text-muted">{label}</dt>
-      <dd className="text-right">{children}</dd>
-    </div>
+      </Space>
+    </Form>
   )
 }

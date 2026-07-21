@@ -34,11 +34,19 @@ jobs:
         run: gcloud auth configure-docker "${GAR_LOCATION}-docker.pkg.dev" --quiet
 
       - name: Build and push image
+        env:
+          # Vite bakes these into the bundle at build time. Defaults keep the
+          # demo build working until the OAuth client and backend exist; set the
+          # repo variables to switch the deployed SPA to real auth + real API.
+          VITE_AUTH_MODE: ${{ vars.VITE_AUTH_MODE || 'mock' }}
+          VITE_USE_MOCKS: ${{ vars.VITE_USE_MOCKS || 'true' }}
         run: |
           IMAGE="${GAR_LOCATION}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${GAR_REPO}/${SERVICE}:${GITHUB_SHA}"
           docker build \
             --build-arg VITE_API_BASE_URL="${{ secrets.VITE_API_BASE_URL }}" \
             --build-arg VITE_GOOGLE_CLIENT_ID="${{ secrets.VITE_GOOGLE_CLIENT_ID }}" \
+            --build-arg VITE_AUTH_MODE="${VITE_AUTH_MODE}" \
+            --build-arg VITE_USE_MOCKS="${VITE_USE_MOCKS}" \
             -t "$IMAGE" frontend
           docker push "$IMAGE"
           echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
