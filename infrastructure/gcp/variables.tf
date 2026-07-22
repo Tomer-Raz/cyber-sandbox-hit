@@ -200,7 +200,7 @@ variable "vertex_location" {
 variable "vertex_model" {
   description = "Gemini model used for CVE template matching."
   type        = string
-  default     = "gemini-2.0-flash"
+  default     = "gemini-2.5-flash"
 }
 
 # ── Auth / CI ─────────────────────────────────────────────────────────────────

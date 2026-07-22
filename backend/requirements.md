@@ -27,7 +27,7 @@ Do not hardcode any of these — read them all through `config.py`.
 | `ARTIFACT_REGISTRY_REPO` | `sandbox-images` | |
 | `SCANNER_JOB_NAME` | `sandbox-dev-scanner` | job to execute per scan |
 | `VERTEX_LOCATION` | `europe-west1` | |
-| `VERTEX_MODEL` | `gemini-2.0-flash` | |
+| `VERTEX_MODEL` | `gemini-2.5-flash` | `gemini-2.0-flash` 404s in this project/region, confirmed live |
 | `GOOGLE_OAUTH_CLIENT_ID` | `321010762291-kqipett824lfoms10vu57nd0ls8v9a54.apps.googleusercontent.com` | **required ID-token audience** |
 | `ALLOWED_ORIGINS` | frontend Cloud Run URL | CORS allowlist |
 
@@ -65,7 +65,9 @@ Runtime facts the container must satisfy:
 - `google-auth` (ADC + Google ID-token verification)
 - `google-cloud-run` (Cloud Run Jobs)
 - `google-cloud-firestore` (Firestore)
-- `google-cloud-aiplatform` (Vertex AI)
+- `google-genai` (Vertex AI — the legacy `google-cloud-aiplatform`
+  `vertexai.generative_models` SDK is deprecated as of June 2025, removed
+  June 2026)
 - `google-cloud-secret-manager`
 - `python-owasp-zap-v2.4`
 - `python-jose` (JWT)

@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     scanner_job_name: str = "sandbox-dev-scanner"
 
     vertex_location: str = "europe-west1"
-    vertex_model: str = "gemini-2.0-flash"
+    vertex_model: str = "gemini-2.5-flash"
 
     # An empty audience would silently disable the only real check standing
     # between the API and the internet, so this has no default.
