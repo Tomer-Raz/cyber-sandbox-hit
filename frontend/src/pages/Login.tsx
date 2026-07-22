@@ -32,17 +32,17 @@ export default function Login() {
 
   // Google hands back an ID token (JWT) from its own rendered button; the
   // backend verifies it. Nothing is trusted from the client side here.
-  const handleGoogleCredential = (credential?: string) => {
+  const handleGoogleCredential = async (credential?: string) => {
     if (!credential || !loginWithCredential) {
       toast.error('Sign-in failed', 'Google did not return a credential.')
       return
     }
     try {
-      loginWithCredential(credential)
+      await loginWithCredential(credential)
       toast.success('Signed in to the Sandbox console')
       navigate(from, { replace: true })
     } catch {
-      toast.error('Sign-in failed', 'Could not start a session. Try again.')
+      toast.error('Sign-in failed', 'The backend rejected this credential. Try again.')
     }
   }
 

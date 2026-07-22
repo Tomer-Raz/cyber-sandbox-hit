@@ -1,21 +1,27 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { GoogleOAuthProvider, googleLogout } from '@react-oauth/google'
 import type { AppUser } from '@/types'
-import { registerTokenGetter, registerUnauthorizedHandler } from '@/api/client'
+import { http, registerTokenGetter, registerUnauthorizedHandler } from '@/api/client'
 import { initialsFromName } from '@/lib/format'
 import { AuthContext, type AuthContextValue, type AuthStatus } from './AuthContext'
 import { googleClientId } from './googleConfig'
-import { decodeIdToken, millisUntilExpiry, type GoogleIdTokenClaims } from './idToken'
+import { decodeIdToken, millisUntilExpiry } from './idToken'
 
-function claimsToUser(claims: GoogleIdTokenClaims): AppUser {
-  const name = claims.name ?? claims.email ?? 'Member'
+interface BackendUser {
+  id: string
+  email: string
+  name: string
+  role: string
+}
+
+function backendUserToAppUser(user: BackendUser): AppUser {
   return {
-    id: claims.sub,
-    name,
-    email: claims.email ?? '',
-    role: 'Member',
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
     org: 'Google Account',
-    initials: initialsFromName(name),
+    initials: initialsFromName(user.name),
   }
 }
 
@@ -45,15 +51,32 @@ function GoogleBridge({ children }: { children: React.ReactNode }) {
   useEffect(() => () => void (expiryTimer.current && clearTimeout(expiryTimer.current)), [])
 
   const loginWithCredential = useCallback(
-    (credential: string) => {
+    async (credential: string) => {
       const claims = decodeIdToken(credential)
       if (!claims) {
         setStatus('idle')
         throw new Error('Malformed Google credential')
       }
 
+      setStatus('loading')
+      // Set the token before the request so the axios interceptor (registered
+      // above via registerTokenGetter) attaches it as the bearer automatically.
       tokenRef.current = credential
-      setUser(claimsToUser(claims))
+
+      let backendUser: BackendUser
+      try {
+        const res = await http.get<BackendUser>('/auth/me')
+        backendUser = res.data
+      } catch (err) {
+        // The backend is the only thing that actually verifies this token
+        // (signature, audience, issuer) — a rejection here means the
+        // credential does not authenticate, regardless of what it decodes to.
+        tokenRef.current = null
+        setStatus('idle')
+        throw err
+      }
+
+      setUser(backendUserToAppUser(backendUser))
       setStatus('authenticated')
 
       // Google ID tokens last an hour. Drop the session exactly when the token

@@ -16,8 +16,12 @@ export interface AuthContextValue {
   login: () => Promise<void>
   logout: () => void
   getToken: () => string | null
-  /** Completes sign-in from a Google ID token (JWT). Present in google mode. */
-  loginWithCredential?: (credential: string) => void
+  /**
+   * Completes sign-in from a Google ID token (JWT). Present in google mode.
+   * Sends the token to the backend, which verifies it and returns the
+   * canonical user record — nothing here is trusted client-side alone.
+   */
+  loginWithCredential?: (credential: string) => Promise<void>
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null)
