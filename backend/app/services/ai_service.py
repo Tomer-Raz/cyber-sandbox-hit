@@ -5,7 +5,7 @@ from google import genai
 from google.cloud import firestore
 from google.genai import types as genai_types
 
-from app.core.config import settings
+from app.core.config import shared_settings
 from app.db.firestore import get_firestore_client
 from app.schemas.finding import AnalyzeFindingsResult, FindingAnalysis, ZapFinding
 
@@ -58,7 +58,9 @@ def _get_genai_client() -> genai.Client:
     global _genai_client
     if _genai_client is None:
         _genai_client = genai.Client(
-            vertexai=True, project=settings.gcp_project_id, location=settings.vertex_location
+            vertexai=True,
+            project=shared_settings.gcp_project_id,
+            location=shared_settings.vertex_location,
         )
     return _genai_client
 
@@ -103,7 +105,7 @@ def _build_prompt(findings: list[ZapFinding]) -> str:
 async def _call_vertex_ai(findings: list[ZapFinding]) -> dict:
     client = _get_genai_client()
     response = await client.aio.models.generate_content(
-        model=settings.vertex_model,
+        model=shared_settings.vertex_model,
         contents=_build_prompt(findings),
         config=genai_types.GenerateContentConfig(
             response_mime_type="application/json",
@@ -137,15 +139,27 @@ async def _store_result(
     client: firestore.AsyncClient,
     scan_id: str,
     signature: str,
+    finding: ZapFinding,
     analysis: FindingAnalysis,
 ) -> None:
     # One doc per (scan_id, finding) even on a cache hit, so report queries
     # against this scan_id (the scan_id ASC + severity DESC index) return the
-    # complete set regardless of which findings were freshly analyzed.
+    # complete set regardless of which findings were freshly analyzed. The raw
+    # finding fields are stored too — the AI enrichment alone (CVE/severity)
+    # is meaningless in a report without what was actually found.
     await client.collection(_AI_RESULTS_COLLECTION).add(
         {
             "scan_id": scan_id,
             "finding_signature": signature,
+            "name": finding.name,
+            "risk": finding.risk,
+            "confidence": finding.confidence,
+            "description": finding.description,
+            "url": finding.url,
+            "param": finding.param,
+            "evidence": finding.evidence,
+            "cwe_id": finding.cwe_id,
+            "solution": finding.solution,
             "cve_ids": analysis.cve_ids,
             "severity": analysis.severity,
             "cvss_score": analysis.cvss_score,
@@ -199,7 +213,7 @@ async def analyze_findings(scan_id: str, findings: list[ZapFinding]) -> AnalyzeF
             raise AIServiceError(f"Vertex AI response missing entry for finding {i}")
 
     finalized: list[FindingAnalysis] = results  # type: ignore[assignment]  # all slots filled above
-    for sig, analysis in zip(signatures, finalized):
-        await _store_result(client, scan_id, sig, analysis)
+    for sig, finding, analysis in zip(signatures, findings, finalized):
+        await _store_result(client, scan_id, sig, finding, analysis)
 
     return AnalyzeFindingsResult(scan_id=scan_id, findings=finalized)

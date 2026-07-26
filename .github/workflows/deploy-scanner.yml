@@ -1,0 +1,72 @@
+name: Deploy Scanner to Cloud Run Jobs
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "backend/**"
+      - ".github/workflows/deploy-scanner.yml"
+  workflow_dispatch:
+
+env:
+  GAR_LOCATION: ${{ vars.GAR_LOCATION }} # e.g. europe-west1
+  GAR_REPO: ${{ vars.GAR_REPO }} # Artifact Registry repo, e.g. sandbox-images
+  JOB: ${{ vars.SCANNER_CLOUD_RUN_JOB }} # e.g. sandbox-dev-scanner
+  REGION: ${{ vars.GCP_REGION }} # e.g. europe-west1
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        working-directory: backend
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        working-directory: backend
+        run: python -m pytest -v
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # required for Workload Identity Federation
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker "${GAR_LOCATION}-docker.pkg.dev" --quiet
+
+      - name: Build and push image
+        run: |
+          IMAGE="${GAR_LOCATION}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${GAR_REPO}/${JOB}:${GITHUB_SHA}"
+          docker build -f backend/Dockerfile.scanner -t "$IMAGE" backend
+          docker push "$IMAGE"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      # This updates the job's container image only — TARGET_URL/SCAN_ID/
+      # SCAN_POLICY are per-execution overrides set by scanner_job_service.py
+      # at run time, not part of the deployed template.
+      - name: Deploy to Cloud Run Jobs
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          job: ${{ env.JOB }}
+          region: ${{ env.REGION }}
+          image: ${{ env.IMAGE }}

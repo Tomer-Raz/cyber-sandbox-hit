@@ -5,7 +5,10 @@ from alembic import context
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.db.session import Base, engine
-from app.models.user import User  # noqa: F401 — registers the table with Base.metadata
+from app.models.scan import Scan  # noqa: F401 — registers the table with Base.metadata
+from app.models.scan_config import ScanConfig  # noqa: F401
+from app.models.target import Target  # noqa: F401
+from app.models.user import User  # noqa: F401
 
 config = context.config
 

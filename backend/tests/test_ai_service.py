@@ -37,7 +37,7 @@ async def test_analyze_findings_calls_vertex_and_stores_result(monkeypatch):
 
     stored = []
 
-    async def fake_store_result(client, scan_id, signature, analysis):
+    async def fake_store_result(client, scan_id, signature, finding, analysis):
         stored.append((scan_id, signature, analysis))
 
     async def fake_call_vertex_ai(findings):
@@ -89,7 +89,7 @@ async def test_analyze_findings_uses_cache_without_calling_vertex(monkeypatch):
 
     stored = []
 
-    async def fake_store_result(client, scan_id, signature, analysis):
+    async def fake_store_result(client, scan_id, signature, finding, analysis):
         stored.append((scan_id, signature, analysis))
 
     async def fake_call_vertex_ai(findings):

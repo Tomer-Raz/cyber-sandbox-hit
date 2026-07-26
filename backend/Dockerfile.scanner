@@ -1,0 +1,29 @@
+# Cloud Run Job image for the scan worker: OWASP ZAP (daemon) + this repo's
+# Python worker (app/scanner_worker.py) driving it. Built and pushed
+# separately from the FastAPI service's Dockerfile — different base image,
+# different Cloud Run resource (job, not service).
+#
+# GHCR, not Docker Hub: the zaproxy/zaproxy Docker Hub org was deleted in
+# 2025 (https://www.zaproxy.org/blog/2023-06-13-ghcr-docker-images/) —
+# ghcr.io is the maintained source for this image now.
+FROM ghcr.io/zaproxy/zaproxy:stable
+
+USER root
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        python3 \
+        python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY requirements.txt .
+# --break-system-packages: this container runs nothing but our worker, so
+# there's no other Python installation on the system to protect.
+RUN pip3 install --no-cache-dir --break-system-packages -r requirements.txt
+
+COPY app ./app
+COPY scanner-entrypoint.sh /scanner-entrypoint.sh
+RUN chmod +x /scanner-entrypoint.sh
+
+ENTRYPOINT ["/scanner-entrypoint.sh"]
