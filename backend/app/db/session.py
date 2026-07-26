@@ -5,7 +5,7 @@ from google.cloud.sql.connector import Connector
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
-from app.core.config import settings
+from app.core.config import get_settings
 
 _connector: Connector | None = None
 
@@ -22,6 +22,7 @@ def _get_connector() -> Connector:
 async def _getconn() -> asyncpg.Connection:
     # No authorized networks and ssl_mode=ENCRYPTED_ONLY on the instance — the
     # connector is the only way in, a plain asyncpg connection is refused.
+    settings = get_settings()
     return await _get_connector().connect_async(
         settings.db_instance_connection_name,
         "asyncpg",

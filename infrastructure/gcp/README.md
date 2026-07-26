@@ -66,7 +66,9 @@ Then uncomment the `backend "gcs"` block in `versions.tf` and run
    - `GCP_SERVICE_ACCOUNT` ← `gh_service_account`
    - `GCP_PROJECT_ID` ← `cyber-sandbox-hit`
    - `VITE_API_BASE_URL` ← `backend_url`
-   - repo variables: `GAR_LOCATION`, `GAR_REPO`, `GCP_REGION`, `CLOUD_RUN_SERVICE`
+   - repo variables: `GAR_LOCATION`, `GAR_REPO`, `GCP_REGION`, `CLOUD_RUN_SERVICE`,
+     `BACKEND_CLOUD_RUN_SERVICE`, `SCANNER_CLOUD_RUN_JOB` (= `scanner_job_name`
+     output, `sandbox-dev-scanner` by default)
 2. Add `frontend_url` to the OAuth client's authorized JavaScript origins.
 3. Whitelist `nat_egress_ip` on any approved scan target — every scan leaves
    from that single IP.
