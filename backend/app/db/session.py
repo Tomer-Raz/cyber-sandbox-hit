@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import AsyncGenerator
 
 import asyncpg
@@ -12,10 +13,14 @@ _connector: Connector | None = None
 
 def _get_connector() -> Connector:
     # Built lazily, not at import time: resolving ADC eagerly would make the
-    # whole app fail to import before it can even serve /health.
+    # whole app fail to import before it can even serve /health. Must bind to
+    # the running loop explicitly — without `loop=`, the connector spins up
+    # its own background loop for the key-generation/refresh Futures it
+    # awaits internally, which then don't belong to the loop `connect_async`
+    # runs on, raising "Future attached to a different loop" on first use.
     global _connector
     if _connector is None:
-        _connector = Connector()
+        _connector = Connector(loop=asyncio.get_running_loop())
     return _connector
 
 
