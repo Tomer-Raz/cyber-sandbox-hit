@@ -3,6 +3,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from app.schemas.scan import ScanEvent, SeverityCounts
+
 
 class ReportFinding(BaseModel):
     name: str
@@ -21,6 +23,20 @@ class ReportFinding(BaseModel):
     remediation: str
 
 
+class ReportAiInsight(BaseModel):
+    """Roll-up of the Vertex AI per-finding analysis stored in Firestore.
+
+    `summary` is verbatim model output for the highest-severity finding —
+    everything else here is counted from the stored findings, not generated.
+    """
+
+    headline: str = ""
+    summary: str = ""
+    top_risks: list[str] = Field(default_factory=list)
+    confidence: float = 0.0
+    model: str = ""
+
+
 class ScanReport(BaseModel):
     scan_id: uuid.UUID
     status: str
@@ -30,3 +46,8 @@ class ScanReport(BaseModel):
     started_at: datetime | None = None
     finished_at: datetime | None = None
     findings: list[ReportFinding] = Field(default_factory=list)
+    counts: SeverityCounts = Field(default_factory=SeverityCounts)
+    total_findings: int = 0
+    risk_score: float = 0.0
+    events: list[ScanEvent] = Field(default_factory=list)
+    ai: ReportAiInsight = Field(default_factory=ReportAiInsight)

@@ -5,13 +5,18 @@ from google.cloud import firestore
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import shared_settings
 from app.db.firestore import get_firestore_client
+from app.models.scan import Scan
 from app.models.scan_config import ScanConfig
 from app.models.user import User
-from app.schemas.report import ReportFinding, ScanReport
+from app.schemas.report import ReportAiInsight, ReportFinding, ScanReport
+from app.schemas.scan import ScanEvent, SeverityCounts
+from app.services import finding_stats_service
 from app.services.scan_access import get_owned_scan
 
 _AI_RESULTS_COLLECTION = "ai_results"
+_AUDIT_EVENTS_COLLECTION = "audit_events"
 
 
 async def get_scan_findings(scan_id: str) -> list[ReportFinding]:
@@ -58,6 +63,11 @@ async def build_scan_report(scan_id: uuid.UUID, user: User, db: AsyncSession) ->
     config = config_result.scalar_one()
 
     findings = await get_scan_findings(str(scan.id))
+
+    counts = finding_stats_service.empty_counts()
+    for finding in findings:
+        counts[finding_stats_service.normalise_severity(finding.severity)] += 1
+
     return ScanReport(
         scan_id=scan.id,
         status=scan.status,
@@ -67,7 +77,78 @@ async def build_scan_report(scan_id: uuid.UUID, user: User, db: AsyncSession) ->
         started_at=scan.started_at,
         finished_at=scan.finished_at,
         findings=findings,
+        counts=SeverityCounts(**counts),
+        total_findings=len(findings),
+        risk_score=finding_stats_service.risk_score(counts),
+        events=await scan_events(scan),
+        ai=_ai_insight(findings, counts),
     )
+
+
+# ZAP's confidence vocabulary, highest first. Anything outside this (or a
+# missing value) counts as unconfirmed.
+_CONFIDENCE_WEIGHTS = {"confirmed": 1.0, "high": 0.9, "medium": 0.6, "low": 0.3}
+
+_SEVERITY_RANK = {"critical": 5, "high": 4, "medium": 3, "low": 2, "info": 1}
+
+
+def _ai_insight(findings: list[ReportFinding], counts: dict[str, int]) -> ReportAiInsight:
+    if not findings:
+        return ReportAiInsight(
+            headline="No findings",
+            summary="The scan completed without recording any findings.",
+            model=shared_settings.vertex_model,
+        )
+
+    ranked = sorted(
+        findings,
+        key=lambda f: (
+            _SEVERITY_RANK.get(finding_stats_service.normalise_severity(f.severity), 1),
+            f.cvss_score,
+        ),
+        reverse=True,
+    )
+    urgent = counts["critical"] + counts["high"]
+    confidence = sum(
+        _CONFIDENCE_WEIGHTS.get(str(f.confidence or "").lower(), 0.0) for f in findings
+    ) / len(findings)
+
+    return ReportAiInsight(
+        headline=(
+            f"{len(findings)} findings, {urgent} critical or high"
+            if urgent
+            else f"{len(findings)} findings, none critical or high"
+        ),
+        summary=ranked[0].summary,
+        top_risks=[f.name for f in ranked[:3]],
+        confidence=round(confidence, 2),
+        model=shared_settings.vertex_model,
+    )
+
+
+async def scan_events(scan: Scan) -> list[ScanEvent]:
+    """Audit trail for one scan, oldest first.
+
+    Queried on scan_id alone and sorted here rather than with an order_by, so
+    this needs no extra Firestore composite index (§6 defines none for it).
+    """
+    try:
+        client = get_firestore_client()
+        query = client.collection(_AUDIT_EVENTS_COLLECTION).where("scan_id", "==", str(scan.id))
+        rows = [doc.to_dict() async for doc in query.stream()]
+    except Exception:  # noqa: BLE001 - the report is still useful without the trail
+        return []
+
+    events = [
+        ScanEvent(
+            timestamp=row["timestamp"],
+            action=row.get("action", "event"),
+            level="error" if "fail" in row.get("action", "") else "info",
+        )
+        for row in rows
+        if row.get("timestamp")
+    ]
+    return sorted(events, key=lambda e: e.timestamp)
 
 
 def render_pdf(report: ScanReport) -> bytes:

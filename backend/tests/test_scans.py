@@ -8,6 +8,7 @@ from app.core.deps import get_current_user
 from app.db.session import get_db
 from app.main import app
 from app.models.scan import Scan
+from app.models.scan_config import ScanConfig
 from app.models.target import Target
 from app.models.user import User
 from app.routers import scans as scans_router
@@ -34,6 +35,17 @@ def _with_session(session: FakeSession):
 
 async def _noop_audit(*_a, **_k):
     pass
+
+
+def _config_for(scan: Scan) -> ScanConfig:
+    """The ScanConfig row `ScanOut` is enriched from (target_url, scan_type)."""
+    return make(
+        ScanConfig,
+        id=scan.config_id,
+        user_id=uuid.uuid4(),
+        target_id=uuid.uuid4(),
+        scan_type="baseline",
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -106,7 +118,12 @@ def test_create_scan_success_starts_job_and_returns_running(monkeypatch):
     user = _override_user()
     app.dependency_overrides[get_current_user] = lambda: user
     target = make(Target, user_id=user.id, url="https://target.example", approved=True)
-    _with_session(FakeSession(execute_results=[FakeResult([target])]))
+    config = make(
+        ScanConfig, user_id=user.id, target_id=target.id, scan_type="baseline"
+    )
+    _with_session(
+        FakeSession(execute_results=[FakeResult([target]), FakeResult([config])])
+    )
     monkeypatch.setattr(scans_router, "validate_target_url", lambda url: url)
 
     async def fake_start(**_kwargs):
@@ -117,14 +134,16 @@ def test_create_scan_success_starts_job_and_returns_running(monkeypatch):
     resp = client.post("/api/scans/", json={"target_id": str(target.id), "scan_type": "baseline"})
 
     assert resp.status_code == 201
-    assert resp.json()["status"] == "running"
+    body = resp.json()
+    assert body["status"] == "running"
+    assert body["target_url"] == "https://target.example"
 
 
 def test_get_scan_delegates_to_owned_scan_lookup(monkeypatch):
     app.dependency_overrides[get_current_user] = lambda: _override_user()
-    _with_session(FakeSession())
     scan = make(Scan, config_id=uuid.uuid4(), status="completed")
     target = make(Target, user_id=uuid.uuid4(), url="https://target.example")
+    _with_session(FakeSession(execute_results=[FakeResult([_config_for(scan)])]))
 
     async def fake_get_owned_scan(_scan_id, _user, _db):
         return scan, target
@@ -139,9 +158,9 @@ def test_get_scan_delegates_to_owned_scan_lookup(monkeypatch):
 
 def test_get_scan_status_does_not_poll_when_terminal(monkeypatch):
     app.dependency_overrides[get_current_user] = lambda: _override_user()
-    _with_session(FakeSession())
     scan = make(Scan, config_id=uuid.uuid4(), status="completed")
     target = make(Target, user_id=uuid.uuid4(), url="https://target.example")
+    _with_session(FakeSession(execute_results=[FakeResult([_config_for(scan)])]))
 
     async def fake_get_owned_scan(_scan_id, _user, _db):
         return scan, target
@@ -155,17 +174,17 @@ def test_get_scan_status_does_not_poll_when_terminal(monkeypatch):
     resp = client.get(f"/api/scans/{scan.id}/status")
 
     assert resp.status_code == 200
-    assert resp.json()["status"] == "completed"
+    assert resp.json()["scan"]["status"] == "completed"
 
 
 def test_get_scan_status_polls_and_updates_when_active(monkeypatch):
     app.dependency_overrides[get_current_user] = lambda: _override_user()
-    session = FakeSession()
-    _with_session(session)
     scan = make(
         Scan, config_id=uuid.uuid4(), status="running", execution_name="projects/p/.../executions/e1"
     )
     target = make(Target, user_id=uuid.uuid4(), url="https://target.example")
+    session = FakeSession(execute_results=[FakeResult([_config_for(scan)])])
+    _with_session(session)
 
     async def fake_get_owned_scan(_scan_id, _user, _db):
         return scan, target
@@ -181,7 +200,7 @@ def test_get_scan_status_polls_and_updates_when_active(monkeypatch):
     resp = client.get(f"/api/scans/{scan.id}/status")
 
     assert resp.status_code == 200
-    assert resp.json()["status"] == "completed"
+    assert resp.json()["scan"]["status"] == "completed"
     assert session.committed is True
 
 

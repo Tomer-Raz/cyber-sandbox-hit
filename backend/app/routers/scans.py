@@ -14,7 +14,7 @@ from app.models.target import Target
 from app.models.user import User
 from app.schemas.report import ScanReport
 from app.schemas.scan import ScanCreate, ScanOut, ScanStatusOut
-from app.services import report_service, scanner_job_service
+from app.services import report_service, scan_view_service, scanner_job_service
 from app.services.audit_service import log_audit_event
 from app.services.scan_access import get_owned_scan
 from app.services.scanner_job_service import ScannerJobError
@@ -28,14 +28,9 @@ _ACTIVE_STATUSES = ("pending", "running")
 async def list_scans(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> list[Scan]:
-    result = await db.execute(
-        select(Scan)
-        .join(ScanConfig, ScanConfig.id == Scan.config_id)
-        .where(ScanConfig.user_id == user.id)
-        .order_by(Scan.created_at.desc())
-    )
-    return list(result.scalars().all())
+) -> list[ScanOut]:
+    rows = await scan_view_service.load_owned_scan_rows(user, db)
+    return await scan_view_service.build_scan_outs(rows)
 
 
 @router.post("/", response_model=ScanOut, status_code=status.HTTP_201_CREATED)
@@ -43,7 +38,7 @@ async def create_scan(
     body: ScanCreate,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> Scan:
+) -> ScanOut:
     result = await db.execute(
         select(Target).where(Target.id == body.target_id, Target.user_id == user.id)
     )
@@ -90,7 +85,7 @@ async def create_scan(
     await log_audit_event(
         user_id=str(user.id), action="scan_started", scan_id=str(scan.id), target_id=str(target.id)
     )
-    return scan
+    return await scan_view_service.build_scan_out(scan, target, db)
 
 
 @router.get("/{scan_id}", response_model=ScanOut)
@@ -98,9 +93,9 @@ async def get_scan(
     scan_id: uuid.UUID,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> Scan:
-    scan, _target = await get_owned_scan(scan_id, user, db)
-    return scan
+) -> ScanOut:
+    scan, target = await get_owned_scan(scan_id, user, db)
+    return await scan_view_service.build_scan_out(scan, target, db)
 
 
 @router.get("/{scan_id}/status", response_model=ScanStatusOut)
@@ -108,8 +103,8 @@ async def get_scan_status(
     scan_id: uuid.UUID,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> Scan:
-    scan, _target = await get_owned_scan(scan_id, user, db)
+) -> ScanStatusOut:
+    scan, target = await get_owned_scan(scan_id, user, db)
 
     if scan.status in _ACTIVE_STATUSES and scan.execution_name:
         try:
@@ -126,7 +121,10 @@ async def get_scan_status(
             await db.commit()
             await db.refresh(scan)
 
-    return scan
+    return ScanStatusOut(
+        scan=await scan_view_service.build_scan_out(scan, target, db),
+        events=await report_service.scan_events(scan),
+    )
 
 
 @router.get("/{scan_id}/report", response_model=ScanReport)
