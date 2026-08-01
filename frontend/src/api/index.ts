@@ -1,6 +1,8 @@
 import type { DashboardStats, Scan, ScanEvent, ScanReport, ScanRequest } from '@/types'
 import { http } from './client'
 import * as engine from './mock/engine'
+import type { ApiDashboard, ApiScan, ApiScanReport, ApiScanEvent } from './adapters'
+import { toApiScanType, toDashboardStats, toScan, toScanEvent, toScanReport } from './adapters'
 
 const USE_MOCKS = (import.meta.env.VITE_USE_MOCKS ?? 'true') !== 'false'
 
@@ -21,47 +23,62 @@ export interface StatusPayload {
 
 // ── Public API ────────────────────────────────────────────
 // Each call branches: mock engine (default) or live FastAPI backend.
+// Collection routes keep their trailing slash: without it FastAPI answers a
+// 307 whose Location the browser refuses to follow from an https:// page.
 export const api = {
   async getDashboard(): Promise<DashboardStats> {
     if (USE_MOCKS) return delay(engine.dashboardStats())
-    const { data } = await http.get<DashboardStats>('/dashboard')
-    return data
+    const { data } = await http.get<ApiDashboard>('/dashboard')
+    return toDashboardStats(data)
   },
 
   async listScans(): Promise<Scan[]> {
     if (USE_MOCKS) return delay(engine.listScans())
-    const { data } = await http.get<Scan[]>('/scans')
-    return data
+    const { data } = await http.get<ApiScan[]>('/scans/')
+    return data.map(toScan)
   },
 
   async getScan(id: string): Promise<Scan> {
     if (USE_MOCKS) return delay(engine.getScan(id) ?? notFound(id))
-    const { data } = await http.get<Scan>(`/scans/${id}`)
-    return data
+    const { data } = await http.get<ApiScan>(`/scans/${id}`)
+    return toScan(data)
   },
 
   async getScanStatus(id: string): Promise<StatusPayload> {
     if (USE_MOCKS) return delay(engine.getStatusPayload(id) ?? notFound(id), 120, 280)
-    const { data } = await http.get<StatusPayload>(`/scans/${id}/status`)
-    return data
+    const { data } = await http.get<{ scan: ApiScan; events: ApiScanEvent[] }>(
+      `/scans/${id}/status`,
+    )
+    return { scan: toScan(data.scan), events: data.events.map(toScanEvent) }
   },
 
   async getReport(id: string): Promise<ScanReport> {
     if (USE_MOCKS) return delay(engine.getReport(id) ?? notFound(id))
-    const { data } = await http.get<ScanReport>(`/scans/${id}/report`)
-    return data
+    const { data } = await http.get<ApiScanReport>(`/scans/${id}/report`)
+    return toScanReport(data)
   },
 
   async createScan(req: ScanRequest): Promise<Scan> {
     if (USE_MOCKS) return delay(engine.createScan(req), 500, 900)
-    const { data } = await http.post<Scan>('/scans', req)
-    return data
+
+    // The backend scans a registered Target, not a raw URL, so the target is
+    // created (and SSRF-checked) first. Re-posting a known URL is harmless.
+    const { data: target } = await http.post<{ id: string }>('/targets/', {
+      url: req.target,
+      description: req.name,
+    })
+    const { data } = await http.post<ApiScan>('/scans/', {
+      target_id: target.id,
+      scan_type: toApiScanType(req.scanType),
+      options: req.options,
+    })
+    return toScan(data)
   },
 
   async cancelScan(id: string): Promise<Scan> {
     if (USE_MOCKS) return delay(engine.cancelScan(id) ?? notFound(id))
-    const { data } = await http.post<Scan>(`/scans/${id}/cancel`)
-    return data
+    await http.delete(`/scans/${id}`)
+    return this.getScan(id)
   },
 }
 

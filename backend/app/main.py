@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
-from app.routers import auth, health, reports, scans, targets
+from app.routers import auth, dashboard, health, reports, scans, targets
 
 app = FastAPI(title="Sandbox Playground API")
 
@@ -21,3 +21,4 @@ app.include_router(auth.router)
 app.include_router(targets.router)
 app.include_router(scans.router)
 app.include_router(reports.router)
+app.include_router(dashboard.router)
