@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { GoogleOutlined } from '@ant-design/icons'
 import { GoogleLogin } from '@react-oauth/google'
-import { Button, Card, Flex, Space, Typography } from 'antd'
+import { Button, Card, Flex, Space, Spin, Typography } from 'antd'
 import { useAuth } from '@/auth/AuthContext'
 import { toast } from '@/lib/notify'
 import { Brand } from '@/components/Brand'
@@ -15,6 +15,15 @@ export default function Login() {
   const [submitting, setSubmitting] = useState(false)
   const from = (location.state as { from?: string } | null)?.from ?? '/'
 
+  // Refreshing on /login with a stored session would otherwise flash the
+  // sign-in card before the redirect lands.
+  if (status === 'restoring') {
+    return (
+      <Flex align="center" justify="center" style={{ minHeight: '100dvh' }}>
+        <Spin size="large" />
+      </Flex>
+    )
+  }
   if (isAuthenticated) return <Navigate to={from} replace />
 
   const handleLogin = async () => {
