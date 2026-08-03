@@ -11,8 +11,8 @@ from app.services import report_service
 from tests.conftest import FakeFirestoreClient, FakeResult, FakeSession
 
 
-def _user(user_id=None):
-    return type("U", (), {"id": user_id or uuid.uuid4()})()
+def _user(user_id=None, role="user"):
+    return type("U", (), {"id": user_id or uuid.uuid4(), "role": role})()
 
 
 def _ai_result_doc(**overrides):
@@ -76,7 +76,7 @@ async def test_build_scan_report_combines_db_and_firestore(monkeypatch):
 
     session = FakeSession(
         execute_results=[
-            FakeResult([(scan, target)]),  # get_owned_scan's join query
+            FakeResult([(scan, target)]),  # get_readable_scan's join query
             FakeResult([config]),  # config lookup
         ]
     )

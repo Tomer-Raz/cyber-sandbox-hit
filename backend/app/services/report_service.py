@@ -13,7 +13,7 @@ from app.models.user import User
 from app.schemas.report import ReportAiInsight, ReportFinding, ScanReport
 from app.schemas.scan import ScanEvent, SeverityCounts
 from app.services import finding_stats_service
-from app.services.scan_access import get_owned_scan
+from app.services.scan_access import get_readable_scan
 
 _AI_RESULTS_COLLECTION = "ai_results"
 _AUDIT_EVENTS_COLLECTION = "audit_events"
@@ -54,10 +54,11 @@ async def get_scan_findings(scan_id: str) -> list[ReportFinding]:
 async def build_scan_report(scan_id: uuid.UUID, user: User, db: AsyncSession) -> ScanReport:
     """Combines the DB scan/target/config with Firestore AI findings.
 
-    Ownership-checked (raises 404 via get_owned_scan) so this is safe to call
-    directly from any route needing a full report for the requesting user.
+    Access-checked (raises 404 via get_readable_scan) so this is safe to call
+    directly from any route needing a full report — the caller's own scans,
+    or any scan at all if they are an admin.
     """
-    scan, target = await get_owned_scan(scan_id, user, db)
+    scan, target = await get_readable_scan(scan_id, user, db)
 
     config_result = await db.execute(select(ScanConfig).where(ScanConfig.id == scan.config_id))
     config = config_result.scalar_one()

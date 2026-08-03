@@ -139,16 +139,16 @@ def test_create_scan_success_starts_job_and_returns_running(monkeypatch):
     assert body["target_url"] == "https://target.example"
 
 
-def test_get_scan_delegates_to_owned_scan_lookup(monkeypatch):
+def test_get_scan_delegates_to_readable_scan_lookup(monkeypatch):
     app.dependency_overrides[get_current_user] = lambda: _override_user()
     scan = make(Scan, config_id=uuid.uuid4(), status="completed")
     target = make(Target, user_id=uuid.uuid4(), url="https://target.example")
     _with_session(FakeSession(execute_results=[FakeResult([_config_for(scan)])]))
 
-    async def fake_get_owned_scan(_scan_id, _user, _db):
+    async def fake_get_readable_scan(_scan_id, _user, _db):
         return scan, target
 
-    monkeypatch.setattr(scans_router, "get_owned_scan", fake_get_owned_scan)
+    monkeypatch.setattr(scans_router, "get_readable_scan", fake_get_readable_scan)
 
     resp = client.get(f"/api/scans/{scan.id}")
 
@@ -162,13 +162,13 @@ def test_get_scan_status_does_not_poll_when_terminal(monkeypatch):
     target = make(Target, user_id=uuid.uuid4(), url="https://target.example")
     _with_session(FakeSession(execute_results=[FakeResult([_config_for(scan)])]))
 
-    async def fake_get_owned_scan(_scan_id, _user, _db):
+    async def fake_get_readable_scan(_scan_id, _user, _db):
         return scan, target
 
     async def fail_if_polled(_execution_name):
         raise AssertionError("Should not poll a terminal scan")
 
-    monkeypatch.setattr(scans_router, "get_owned_scan", fake_get_owned_scan)
+    monkeypatch.setattr(scans_router, "get_readable_scan", fake_get_readable_scan)
     monkeypatch.setattr(scanner_job_service, "get_execution_status", fail_if_polled)
 
     resp = client.get(f"/api/scans/{scan.id}/status")
@@ -186,7 +186,7 @@ def test_get_scan_status_polls_and_updates_when_active(monkeypatch):
     session = FakeSession(execute_results=[FakeResult([_config_for(scan)])])
     _with_session(session)
 
-    async def fake_get_owned_scan(_scan_id, _user, _db):
+    async def fake_get_readable_scan(_scan_id, _user, _db):
         return scan, target
 
     finished = datetime.now(timezone.utc)
@@ -194,7 +194,7 @@ def test_get_scan_status_polls_and_updates_when_active(monkeypatch):
     async def fake_status(_execution_name):
         return {"status": "completed", "started_at": scan.started_at, "finished_at": finished}
 
-    monkeypatch.setattr(scans_router, "get_owned_scan", fake_get_owned_scan)
+    monkeypatch.setattr(scans_router, "get_readable_scan", fake_get_readable_scan)
     monkeypatch.setattr(scanner_job_service, "get_execution_status", fake_status)
 
     resp = client.get(f"/api/scans/{scan.id}/status")

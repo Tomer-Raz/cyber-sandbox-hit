@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { AppUser } from '@/types'
+import { ADMIN_ROLE, type AppUser } from '@/types'
 import { registerTokenGetter, registerUnauthorizedHandler } from '@/api/client'
 import { AuthContext, type AuthContextValue, type AuthStatus } from './AuthContext'
 
 const STORAGE_KEY = 'sbx.auth.session'
 
+// `role` is what gates the admin routes, so it holds a real role name rather
+// than a job title — and the demo user is an admin so the admin console is
+// reachable when demoing without a backend.
 const DEMO_USER: AppUser = {
   id: 'usr_john',
   name: 'John Doe',
   email: 'john.doe@hit.ac.il',
-  role: 'Security Analyst',
+  role: ADMIN_ROLE,
   org: 'HIT · Cyber Lab',
   initials: 'JD',
 }

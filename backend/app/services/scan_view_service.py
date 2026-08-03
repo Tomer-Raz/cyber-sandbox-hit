@@ -17,6 +17,8 @@ from app.schemas.scan import ScanOut, SeverityCounts
 from app.services import finding_stats_service
 
 ScanRow = tuple[Scan, ScanConfig, Target]
+# Same join plus the owning user — the admin views need to say who ran what.
+ScanWithUserRow = tuple[Scan, ScanConfig, Target, User]
 
 
 def owned_scans_query(user: User) -> Select[ScanRow]:
@@ -36,6 +38,26 @@ def owned_scans_query(user: User) -> Select[ScanRow]:
 async def load_owned_scan_rows(user: User, db: AsyncSession) -> list[ScanRow]:
     result = await db.execute(owned_scans_query(user))
     return [(row[0], row[1], row[2]) for row in result.all()]
+
+
+def all_scans_query() -> Select[ScanWithUserRow]:
+    """Every scan in the system, joined with the user who started it.
+
+    The one query in this codebase with no ownership filter — its only caller
+    is the admin router, which is gated by `require_admin`.
+    """
+    return (
+        select(Scan, ScanConfig, Target, User)
+        .join(ScanConfig, ScanConfig.id == Scan.config_id)
+        .join(Target, Target.id == ScanConfig.target_id)
+        .join(User, User.id == ScanConfig.user_id)
+        .order_by(Scan.created_at.desc())
+    )
+
+
+async def load_all_scan_rows(db: AsyncSession) -> list[ScanWithUserRow]:
+    result = await db.execute(all_scans_query())
+    return [(row[0], row[1], row[2], row[3]) for row in result.all()]
 
 
 async def build_scan_outs(rows: list[ScanRow]) -> list[ScanOut]:

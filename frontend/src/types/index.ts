@@ -153,3 +153,25 @@ export interface AppUser {
   org: string
   initials: string
 }
+
+export const ADMIN_ROLE = 'admin'
+
+/**
+ * A user as the admin console lists them. Read-only by design: every field is
+ * owned by the person's Google account or by the project's GCP IAM policy, so
+ * there is no edit counterpart anywhere in the SPA.
+ */
+export interface AdminUser {
+  id: string
+  name: string
+  email: string
+  role: string
+  createdAt: string
+  scanCount: number
+  lastScanAt: string | null
+}
+
+/** A scan row from the admin view, where `requestedBy` is often someone else. */
+export interface AdminScan extends Scan {
+  requestedByEmail: string
+}

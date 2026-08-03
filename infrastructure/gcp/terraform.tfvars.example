@@ -40,6 +40,13 @@ google_oauth_client_id = ""
 github_owner = "Tomer-Raz"
 github_repo  = "cyber-sandbox-hit"
 
+# Custom project role whose members get the read-only `admin` role in the app
+# (sees every user and every scan). Terraform creates the role but never its
+# membership: grant it per-person in IAM, so no email is committed to the repo.
+#   gcloud projects add-iam-policy-binding <project> \
+#     --member="user:<email>" --role="projects/<project>/roles/appAdmin"
+admin_iam_role_id = "appAdmin"
+
 # Receives Cloud Monitoring alerts and budget notifications. Empty disables them.
 alert_email = ""
 

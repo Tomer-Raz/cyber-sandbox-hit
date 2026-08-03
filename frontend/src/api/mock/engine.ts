@@ -1,4 +1,6 @@
 import type {
+  AdminScan,
+  AdminUser,
   AiInsight,
   CategoryCount,
   DashboardStats,
@@ -559,4 +561,38 @@ export function dashboardStats(): DashboardStats {
     trend,
     severityTotals,
   }
+}
+
+// ── Admin views ───────────────────────────────────────────
+// Mock mode has no user table, so the roster is derived from whoever
+// requested the seeded scans.
+
+function emailFor(name: string): string {
+  return `${name.toLowerCase().replace(/[^a-z]+/g, '.')}@hit.ac.il`
+}
+
+export function adminScans(): AdminScan[] {
+  return listScans().map((scan) => ({ ...scan, requestedByEmail: emailFor(scan.requestedBy) }))
+}
+
+export function adminUsers(): AdminUser[] {
+  const scans = listScans()
+  const dayMs = 24 * 60 * MIN
+  return REQUESTERS.map((name, i) => {
+    const theirs = scans.filter((s) => s.requestedBy === name)
+    const lastScanAt = theirs.reduce<string | null>(
+      (latest, s) => (!latest || s.createdAt > latest ? s.createdAt : latest),
+      null,
+    )
+    return {
+      id: `usr_${(i + 1).toString().padStart(4, '0')}`,
+      name,
+      email: emailFor(name),
+      // Mirrors the real backend: exactly one allowlisted admin.
+      role: i === 0 ? 'admin' : 'user',
+      createdAt: new Date(NOW - (30 + i * 12) * dayMs).toISOString(),
+      scanCount: theirs.length,
+      lastScanAt,
+    }
+  })
 }

@@ -55,6 +55,42 @@ resource "google_service_account_iam_member" "backend_uses_scanner_sa" {
   member             = "serviceAccount:${google_service_account.backend.email}"
 }
 
+# ── Application admin ────────────────────────────────────────────────────────
+
+# The `appAdmin` marker role (var.admin_iam_role_id) has no resource here, for
+# the same reason google_oauth_client_id doesn't: Terraform can't express it.
+# It carries *zero* permissions — holding it grants nothing whatsoever in GCP,
+# and its only meaning is the one the app gives it (the backend lists the role's
+# members and treats them as application administrators). The provider requires
+# `permissions` to have at least one entry, and padding it with a real one just
+# to satisfy that schema would hand every app admin actual GCP access.
+#
+# Create it once with:
+#   gcloud iam roles create appAdmin --project=<project> \
+#     --title="Cyber Sandbox App Admin" --stage=GA --permissions=""
+#
+# Membership is deliberately out of Terraform too: admins are people, and
+# putting their addresses here would hard-code identities into the repo. Grant
+# and revoke with
+#   gcloud projects add-iam-policy-binding <project> \
+#     --member="user:<email>" --role="projects/<project>/roles/appAdmin"
+# which Cloud Audit Logs records like any other IAM change.
+
+# Least privilege for reading that policy: `roles/browser` would also let the
+# backend enumerate other projects and folders.
+resource "google_project_iam_custom_role" "iam_policy_reader" {
+  role_id     = "iamPolicyReader"
+  title       = "Cyber Sandbox IAM Policy Reader"
+  description = "Least-privilege read of the project IAM policy, so the backend can resolve which principals hold the appAdmin marker role."
+  permissions = ["resourcemanager.projects.getIamPolicy"]
+}
+
+resource "google_project_iam_member" "backend_reads_iam_policy" {
+  project = var.project_id
+  role    = google_project_iam_custom_role.iam_policy_reader.id
+  member  = "serviceAccount:${google_service_account.backend.email}"
+}
+
 # ── Scanner: writes results, nothing else ────────────────────────────────────
 
 resource "google_project_iam_member" "scanner" {

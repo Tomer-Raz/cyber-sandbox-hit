@@ -48,6 +48,12 @@ class Settings(SharedSettings):
 
     allowed_origins: str = ""
 
+    # Custom project-level IAM role whose members are the app's admins. Only
+    # the role *name* lives in config — who holds it is read from the project
+    # IAM policy at runtime (app.services.admin_directory), so no identity is
+    # configured in this codebase or its deployment.
+    admin_iam_role_id: str = "appAdmin"
+
     @property
     def cors_origins(self) -> list[str]:
         return [o.strip() for o in self.allowed_origins.split(",") if o.strip()]

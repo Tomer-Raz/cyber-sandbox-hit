@@ -1,8 +1,31 @@
-import type { DashboardStats, Scan, ScanEvent, ScanReport, ScanRequest } from '@/types'
+import type {
+  AdminScan,
+  AdminUser,
+  DashboardStats,
+  Scan,
+  ScanEvent,
+  ScanReport,
+  ScanRequest,
+} from '@/types'
 import { http } from './client'
 import * as engine from './mock/engine'
-import type { ApiDashboard, ApiScan, ApiScanReport, ApiScanEvent } from './adapters'
-import { toApiScanType, toDashboardStats, toScan, toScanEvent, toScanReport } from './adapters'
+import type {
+  ApiAdminScan,
+  ApiAdminUser,
+  ApiDashboard,
+  ApiScan,
+  ApiScanReport,
+  ApiScanEvent,
+} from './adapters'
+import {
+  toAdminScan,
+  toAdminUser,
+  toApiScanType,
+  toDashboardStats,
+  toScan,
+  toScanEvent,
+  toScanReport,
+} from './adapters'
 
 const USE_MOCKS = (import.meta.env.VITE_USE_MOCKS ?? 'true') !== 'false'
 
@@ -79,6 +102,23 @@ export const api = {
     if (USE_MOCKS) return delay(engine.cancelScan(id) ?? notFound(id))
     await http.delete(`/scans/${id}`)
     return this.getScan(id)
+  },
+
+  // ── Admin ───────────────────────────────────────────────
+  // Read-only. The backend rejects these with 403 for anyone who does not hold
+  // the admin role in GCP IAM, so the nav-level check in the SPA is
+  // convenience, not the actual gate.
+
+  async listAdminUsers(): Promise<AdminUser[]> {
+    if (USE_MOCKS) return delay(engine.adminUsers())
+    const { data } = await http.get<ApiAdminUser[]>('/admin/users')
+    return data.map(toAdminUser)
+  },
+
+  async listAdminScans(): Promise<AdminScan[]> {
+    if (USE_MOCKS) return delay(engine.adminScans())
+    const { data } = await http.get<ApiAdminScan[]>('/admin/scans')
+    return data.map(toAdminScan)
   },
 }
 

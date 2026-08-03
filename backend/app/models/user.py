@@ -7,6 +7,11 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
 
+# Mirrors the caller's GCP IAM bindings, refreshed on each request and never
+# written by an API call — see app.core.deps.resolve_role.
+ADMIN_ROLE = "admin"
+USER_ROLE = "user"
+
 
 class User(Base):
     __tablename__ = "users"
