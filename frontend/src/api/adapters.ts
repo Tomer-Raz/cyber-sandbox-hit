@@ -8,6 +8,8 @@
 // ============================================================
 
 import type {
+  AdminScan,
+  AdminUser,
   AiInsight,
   CategoryCount,
   Confidence,
@@ -90,6 +92,22 @@ export interface ApiScanReport {
     confidence: number
     model: string
   }
+}
+
+export interface ApiAdminUser {
+  id: string
+  email: string
+  name: string
+  role: string
+  created_at: string
+  scan_count: number
+  last_scan_at: string | null
+}
+
+export interface ApiAdminScan extends ApiScan {
+  user_id: string
+  user_email: string
+  user_name: string
 }
 
 export interface ApiDashboard {
@@ -295,6 +313,28 @@ export function toScanReport(dto: ApiScanReport): ScanReport {
     events: dto.events.map(toScanEvent),
     ai,
     findingsByCategory,
+  }
+}
+
+export function toAdminUser(dto: ApiAdminUser): AdminUser {
+  return {
+    id: dto.id,
+    name: dto.name,
+    email: dto.email,
+    role: dto.role,
+    createdAt: dto.created_at,
+    scanCount: dto.scan_count,
+    lastScanAt: dto.last_scan_at,
+  }
+}
+
+export function toAdminScan(dto: ApiAdminScan): AdminScan {
+  return {
+    ...toScan(dto),
+    // Unlike the owner-scoped lists, the admin view really does span users, so
+    // `requestedBy` is filled from the payload rather than the session.
+    requestedBy: dto.user_name,
+    requestedByEmail: dto.user_email,
   }
 }
 

@@ -1,30 +1,45 @@
 import { useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
+  AuditOutlined,
   DashboardOutlined,
   LogoutOutlined,
   MenuOutlined,
   PlusOutlined,
   RadarChartOutlined,
   SettingOutlined,
+  TeamOutlined,
 } from '@ant-design/icons'
 import type { MenuProps } from 'antd'
-import { Avatar, Button, Drawer, Dropdown, Grid, Layout, Menu, Space, Typography } from 'antd'
+import { Avatar, Button, Drawer, Dropdown, Grid, Layout, Menu, Space, Tag, Typography } from 'antd'
 import { useAuth } from '@/auth/AuthContext'
 import { Brand } from '@/components/Brand'
 import { APP_NAME } from '@/lib/constants'
+import { ADMIN_ROLE } from '@/types'
 
 const { Header, Sider, Content } = Layout
 
-const NAV_ITEMS: MenuProps['items'] = [
+type NavItems = NonNullable<MenuProps['items']>
+
+const NAV_ITEMS: NavItems = [
   { key: '/', icon: <DashboardOutlined />, label: 'Overview' },
   { key: '/scans', icon: <RadarChartOutlined />, label: 'Scans' },
   { key: '/scans/new', icon: <PlusOutlined />, label: 'New Scan' },
   { key: '/settings', icon: <SettingOutlined />, label: 'Settings' },
 ]
 
+// Hidden from everyone else purely to avoid dead links — the backend rejects
+// /api/admin for non-admins regardless of what the menu shows.
+const ADMIN_NAV_ITEMS: NavItems = [
+  { type: 'divider' },
+  { key: '/admin/users', icon: <TeamOutlined />, label: 'Users' },
+  { key: '/admin/scans', icon: <AuditOutlined />, label: 'All Scans' },
+]
+
 function selectedKey(pathname: string): string {
   if (pathname === '/') return '/'
+  if (pathname.startsWith('/admin/users')) return '/admin/users'
+  if (pathname.startsWith('/admin/scans')) return '/admin/scans'
   if (pathname === '/scans/new') return '/scans/new'
   if (pathname.startsWith('/scans')) return '/scans'
   if (pathname.startsWith('/settings')) return '/settings'
@@ -35,6 +50,8 @@ function routeTitle(pathname: string): string {
   if (pathname === '/') return 'Overview'
   if (pathname === '/scans') return 'Scans'
   if (pathname === '/scans/new') return 'New Scan'
+  if (pathname === '/admin/users') return 'Users'
+  if (pathname === '/admin/scans') return 'All Scans'
   if (pathname.endsWith('/report')) return 'Scan Report'
   if (pathname.startsWith('/scans/')) return 'Scan Progress'
   if (pathname === '/settings') return 'Settings'
@@ -57,11 +74,13 @@ export function AppLayout() {
     setDrawerOpen(false)
   }
 
+  const isAdmin = user?.role === ADMIN_ROLE
+
   const nav = (
     <Menu
       mode="inline"
       selectedKeys={[selectedKey(location.pathname)]}
-      items={NAV_ITEMS}
+      items={isAdmin ? [...NAV_ITEMS, ...ADMIN_NAV_ITEMS] : NAV_ITEMS}
       onClick={handleNav}
       style={{ borderInlineEnd: 'none' }}
     />
@@ -145,6 +164,11 @@ export function AppLayout() {
                   {user?.initials}
                 </Avatar>
                 {!isMobile && <span>{user?.name}</span>}
+                {isAdmin && !isMobile && (
+                  <Tag color="gold" style={{ marginInlineEnd: 0 }}>
+                    Admin
+                  </Tag>
+                )}
               </Space>
             </Button>
           </Dropdown>

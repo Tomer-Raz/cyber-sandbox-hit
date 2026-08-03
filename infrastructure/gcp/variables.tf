@@ -211,6 +211,20 @@ variable "google_oauth_client_id" {
   default     = ""
 }
 
+variable "admin_iam_role_id" {
+  description = <<-EOT
+    ID of the custom project role whose members get the `admin` role in the app:
+    read-only visibility over every user and every scan.
+
+    Only the role name is configured here. Neither the role itself nor its
+    membership is managed by Terraform — see the "Application admin" section of
+    iam.tf for why, and for the gcloud commands to create and grant it. No
+    person's email address appears anywhere in this repo.
+  EOT
+  type        = string
+  default     = "appAdmin"
+}
+
 variable "github_owner" {
   description = "GitHub org/user that owns the repo allowed to deploy."
   type        = string

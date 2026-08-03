@@ -106,6 +106,12 @@ resource "google_cloud_run_v2_service" "backend" {
         name  = "ALLOWED_ORIGINS"
         value = google_cloud_run_v2_service.frontend.uri
       }
+      # The role to look up, not the people in it — the backend reads the
+      # project IAM policy at runtime to find out who currently holds it.
+      env {
+        name  = "ADMIN_IAM_ROLE_ID"
+        value = var.admin_iam_role_id
+      }
 
       env {
         name = "DB_PASSWORD"

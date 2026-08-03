@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { Route, Routes } from 'react-router-dom'
 import { Spin } from 'antd'
+import { RequireAdmin } from '@/auth/RequireAdmin'
 import { RequireAuth } from '@/auth/RequireAuth'
 import { AppLayout } from '@/components/layout/AppLayout'
 import Login from '@/pages/Login'
@@ -13,6 +14,8 @@ const NewScan = lazy(() => import('@/pages/NewScan'))
 const ScanStatus = lazy(() => import('@/pages/ScanStatus'))
 const Report = lazy(() => import('@/pages/Report'))
 const Settings = lazy(() => import('@/pages/Settings'))
+const AdminUsers = lazy(() => import('@/pages/admin/Users'))
+const AdminScans = lazy(() => import('@/pages/admin/Scans'))
 const NotFound = lazy(() => import('@/pages/NotFound'))
 
 function PageFallback() {
@@ -41,6 +44,22 @@ export default function App() {
           <Route path="scans/:id" element={<ScanStatus />} />
           <Route path="scans/:id/report" element={<Report />} />
           <Route path="settings" element={<Settings />} />
+          <Route
+            path="admin/users"
+            element={
+              <RequireAdmin>
+                <AdminUsers />
+              </RequireAdmin>
+            }
+          />
+          <Route
+            path="admin/scans"
+            element={
+              <RequireAdmin>
+                <AdminScans />
+              </RequireAdmin>
+            }
+          />
         </Route>
         <Route path="*" element={<NotFound />} />
       </Routes>

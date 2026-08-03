@@ -16,7 +16,7 @@ from app.schemas.report import ScanReport
 from app.schemas.scan import ScanCreate, ScanOut, ScanStatusOut
 from app.services import report_service, scan_view_service, scanner_job_service
 from app.services.audit_service import log_audit_event
-from app.services.scan_access import get_owned_scan
+from app.services.scan_access import get_owned_scan, get_readable_scan
 from app.services.scanner_job_service import ScannerJobError
 
 router = APIRouter(prefix="/api/scans", tags=["scans"])
@@ -94,7 +94,7 @@ async def get_scan(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ScanOut:
-    scan, target = await get_owned_scan(scan_id, user, db)
+    scan, target = await get_readable_scan(scan_id, user, db)
     return await scan_view_service.build_scan_out(scan, target, db)
 
 
@@ -104,7 +104,7 @@ async def get_scan_status(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ScanStatusOut:
-    scan, target = await get_owned_scan(scan_id, user, db)
+    scan, target = await get_readable_scan(scan_id, user, db)
 
     if scan.status in _ACTIVE_STATUSES and scan.execution_name:
         try:
