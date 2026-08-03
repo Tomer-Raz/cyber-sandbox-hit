@@ -25,35 +25,101 @@ function backendUserToAppUser(user: BackendUser): AppUser {
   }
 }
 
+const STORAGE_KEY = 'sbx.auth.google.credential'
+
+/**
+ * sessionStorage rather than localStorage: this is the live bearer credential,
+ * so it stays scoped to the tab and dies with it. Surviving a reload is the
+ * point; surviving a closed browser is not worth the wider exposure, and the
+ * token is only valid for an hour anyway.
+ */
+function readStoredCredential(): string | null {
+  try {
+    const token = sessionStorage.getItem(STORAGE_KEY)
+    if (!token) return null
+    // Expiry is checked here so an expired token never causes a doomed
+    // /auth/me round trip on every page load.
+    if (millisUntilExpiry(decodeIdToken(token)) <= 0) {
+      sessionStorage.removeItem(STORAGE_KEY)
+      return null
+    }
+    return token
+  } catch {
+    return null
+  }
+}
+
 function GoogleBridge({ children }: { children: React.ReactNode }) {
   // The ID token itself is the bearer credential. The backend verifies its
   // signature and checks aud === VITE_GOOGLE_CLIENT_ID, which is what makes a
   // token minted for some other Google app unusable here.
-  const tokenRef = useRef<string | null>(null)
+  //
+  // Read once, synchronously, so the very first render already knows whether a
+  // session is being restored. Deciding that in an effect would render one
+  // frame as signed-out, which is exactly what bounced refreshes to /login.
+  const [storedCredential] = useState(readStoredCredential)
+  const tokenRef = useRef<string | null>(storedCredential)
   const expiryTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [user, setUser] = useState<AppUser | null>(null)
-  const [status, setStatus] = useState<AuthStatus>('idle')
+  const [status, setStatus] = useState<AuthStatus>(storedCredential ? 'restoring' : 'idle')
 
   const logout = useCallback(() => {
     if (expiryTimer.current) clearTimeout(expiryTimer.current)
     expiryTimer.current = null
     tokenRef.current = null
+    sessionStorage.removeItem(STORAGE_KEY)
     googleLogout()
     setUser(null)
     setStatus('idle')
   }, [])
+
+  // Google ID tokens last an hour. Drop the session exactly when the token
+  // dies rather than letting the app send an expired bearer.
+  const armExpiry = useCallback(
+    (credential: string) => {
+      if (expiryTimer.current) clearTimeout(expiryTimer.current)
+      const ttl = millisUntilExpiry(decodeIdToken(credential))
+      expiryTimer.current = ttl > 0 ? setTimeout(logout, ttl) : null
+      if (ttl <= 0) logout()
+    },
+    [logout],
+  )
 
   useEffect(() => {
     registerTokenGetter(() => tokenRef.current)
     registerUnauthorizedHandler(logout)
   }, [logout])
 
+  // Declared after the registration effect above so the token getter is live
+  // before this fires — /auth/me must go out with the restored bearer attached.
+  useEffect(() => {
+    if (!storedCredential) return
+    let cancelled = false
+
+    void (async () => {
+      try {
+        const { data } = await http.get<BackendUser>('/auth/me')
+        if (cancelled) return
+        setUser(backendUserToAppUser(data))
+        setStatus('authenticated')
+        armExpiry(storedCredential)
+      } catch {
+        // Revalidation is the whole point of restoring through the backend: a
+        // revoked or tampered token must not survive a refresh.
+        if (!cancelled) logout()
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [storedCredential, armExpiry, logout])
+
   useEffect(() => () => void (expiryTimer.current && clearTimeout(expiryTimer.current)), [])
 
   const loginWithCredential = useCallback(
     async (credential: string) => {
-      const claims = decodeIdToken(credential)
-      if (!claims) {
+      if (!decodeIdToken(credential)) {
         setStatus('idle')
         throw new Error('Malformed Google credential')
       }
@@ -76,17 +142,20 @@ function GoogleBridge({ children }: { children: React.ReactNode }) {
         throw err
       }
 
+      // Only persisted once the backend has accepted it, so a rejected
+      // credential can't be replayed on the next page load.
+      try {
+        sessionStorage.setItem(STORAGE_KEY, credential)
+      } catch {
+        // Private-mode quota failures cost persistence across reloads, not the
+        // session in hand.
+      }
+
       setUser(backendUserToAppUser(backendUser))
       setStatus('authenticated')
-
-      // Google ID tokens last an hour. Drop the session exactly when the token
-      // dies rather than letting the app send an expired bearer.
-      const ttl = millisUntilExpiry(claims)
-      if (expiryTimer.current) clearTimeout(expiryTimer.current)
-      expiryTimer.current = ttl > 0 ? setTimeout(logout, ttl) : null
-      if (ttl <= 0) logout()
+      armExpiry(credential)
     },
-    [logout],
+    [armExpiry],
   )
 
   // Google's ID-token flow only comes from their rendered button, so there is
