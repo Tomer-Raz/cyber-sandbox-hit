@@ -15,13 +15,29 @@ import {
   Typography,
 } from 'antd'
 import { useAuth } from '@/auth/AuthContext'
+import { ACCENT_HEX } from '@/lib/constants'
 import { toast } from '@/lib/notify'
 
-interface Prefs {
-  emailAlerts: boolean
-  autoValidate: boolean
-  weeklyDigest: boolean
-}
+const PREFS: { key: string; label: string; extra: string; default: boolean }[] = [
+  {
+    key: 'emailAlerts',
+    label: 'Email alerts',
+    extra: 'Notify me when a scan finds critical or high-severity issues',
+    default: true,
+  },
+  {
+    key: 'autoValidate',
+    label: 'Auto-run exploit validation',
+    extra: 'Validate high-risk findings automatically after each scan',
+    default: true,
+  },
+  {
+    key: 'weeklyDigest',
+    label: 'Weekly digest',
+    extra: 'A Monday summary of scan activity and open risks',
+    default: false,
+  },
+]
 
 function genApiKey(): string {
   const bytes = new Uint8Array(16)
@@ -34,8 +50,6 @@ export default function Settings() {
   const { user, logout, mode } = useAuth()
   const navigate = useNavigate()
   const [apiKey, setApiKey] = useState(genApiKey)
-
-  const initialPrefs: Prefs = { emailAlerts: true, autoValidate: true, weeklyDigest: false }
 
   const copyKey = async () => {
     try {
@@ -57,7 +71,7 @@ export default function Settings() {
     <Space direction="vertical" size="large" style={{ width: '100%', maxWidth: 800 }}>
       <Card title="Profile">
         <Flex gap={16} align="center" wrap>
-          <Avatar size={56} style={{ backgroundColor: '#1677ff' }}>
+          <Avatar size={56} style={{ backgroundColor: ACCENT_HEX }}>
             {user.initials}
           </Avatar>
           <div style={{ minWidth: 0 }}>
@@ -90,34 +104,21 @@ export default function Settings() {
       <Card title="Notifications & automation">
         <Form
           layout="vertical"
-          initialValues={initialPrefs}
+          initialValues={Object.fromEntries(PREFS.map((p) => [p.key, p.default]))}
           onValuesChange={() => toast.success('Preference saved')}
         >
-          <Form.Item
-            name="emailAlerts"
-            label="Email alerts"
-            valuePropName="checked"
-            extra="Notify me when a scan finds critical or high-severity issues"
-          >
-            <Switch />
-          </Form.Item>
-          <Form.Item
-            name="autoValidate"
-            label="Auto-run exploit validation"
-            valuePropName="checked"
-            extra="Validate high-risk findings automatically after each scan"
-          >
-            <Switch />
-          </Form.Item>
-          <Form.Item
-            name="weeklyDigest"
-            label="Weekly digest"
-            valuePropName="checked"
-            extra="A Monday summary of scan activity and open risks"
-            style={{ marginBottom: 0 }}
-          >
-            <Switch />
-          </Form.Item>
+          {PREFS.map((p, i) => (
+            <Form.Item
+              key={p.key}
+              name={p.key}
+              label={p.label}
+              valuePropName="checked"
+              extra={p.extra}
+              style={i === PREFS.length - 1 ? { marginBottom: 0 } : undefined}
+            >
+              <Switch />
+            </Form.Item>
+          ))}
         </Form>
       </Card>
 

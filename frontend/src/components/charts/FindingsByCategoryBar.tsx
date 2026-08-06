@@ -1,5 +1,5 @@
 import { Bar, BarChart, LabelList, ResponsiveContainer, XAxis, YAxis } from 'recharts'
-import { ACCENT_HEX } from '@/lib/constants'
+import { ACCENT_HEX, TEXT } from '@/lib/constants'
 import type { CategoryCount } from '@/types'
 
 export function FindingsByCategoryBar({ data }: { data: CategoryCount[] }) {
@@ -22,7 +22,7 @@ export function FindingsByCategoryBar({ data }: { data: CategoryCount[] }) {
             width={130}
             tickLine={false}
             axisLine={false}
-            tick={{ fontSize: 12, fill: 'rgba(0, 0, 0, 0.65)' }}
+            tick={{ fontSize: 12, fill: TEXT }}
           />
           <Bar
             dataKey="count"
@@ -31,7 +31,7 @@ export function FindingsByCategoryBar({ data }: { data: CategoryCount[] }) {
             maxBarSize={16}
             isAnimationActive={false}
           >
-            <LabelList dataKey="count" position="right" fill="rgba(0, 0, 0, 0.65)" fontSize={12} />
+            <LabelList dataKey="count" position="right" fill={TEXT} fontSize={12} />
           </Bar>
         </BarChart>
       </ResponsiveContainer>

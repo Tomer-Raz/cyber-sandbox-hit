@@ -1,11 +1,17 @@
-import type { PhaseKey, ScanStatus, ScanType, Severity } from '@/types'
+import type { PhaseKey, ScanEvent, ScanStatus, ScanType, Severity } from '@/types'
+
+export const ACCENT_HEX = '#1677ff'
+/** antd text tones: TEXT for body copy, MUTED for axis/secondary labels. */
+export const TEXT = 'rgba(0, 0, 0, 0.65)'
+export const MUTED = 'rgba(0, 0, 0, 0.45)'
+export const APP_NAME = 'Sandbox Playground'
+export const APP_TAGLINE = 'Autonomous Pentest Console'
 
 // ── Severity ──────────────────────────────────────────────
+/** `hex` is the chart fill, `tag` the antd Tag preset. */
 export interface SeverityMeta {
   label: string
-  /** Chart fill colour. */
   hex: string
-  /** antd Tag preset colour. */
   tag: string
   rank: number
 }
@@ -15,13 +21,10 @@ export const SEVERITY_META: Record<Severity, SeverityMeta> = {
   high: { label: 'High', hex: '#fa541c', tag: 'volcano', rank: 4 },
   medium: { label: 'Medium', hex: '#faad14', tag: 'gold', rank: 3 },
   low: { label: 'Low', hex: '#52c41a', tag: 'green', rank: 2 },
-  info: { label: 'Info', hex: '#1677ff', tag: 'blue', rank: 1 },
+  info: { label: 'Info', hex: ACCENT_HEX, tag: 'blue', rank: 1 },
 }
 
 export const SEVERITY_ORDER: Severity[] = ['critical', 'high', 'medium', 'low', 'info']
-
-export const ACCENT_HEX = '#1677ff'
-export const ACCENT2_HEX = '#69b1ff'
 
 // ── Scan type ─────────────────────────────────────────────
 export interface ScanTypeMeta {
@@ -71,13 +74,7 @@ export const SCAN_TYPE_META: Record<ScanType, ScanTypeMeta> = {
 export const SCAN_TYPES: ScanType[] = ['baseline', 'quick', 'full', 'api']
 
 // ── Lifecycle phases (antd Steps) ─────────────────────────
-export interface PhaseMeta {
-  key: PhaseKey
-  label: string
-  description: string
-}
-
-export const PHASES: PhaseMeta[] = [
+export const PHASES: { key: PhaseKey; label: string; description: string }[] = [
   {
     key: 'provisioning',
     label: 'Provisioning',
@@ -105,24 +102,8 @@ export const PHASES: PhaseMeta[] = [
   },
 ]
 
-export const PHASE_FLOW: PhaseKey[] = [
-  'queued',
-  'provisioning',
-  'scanning',
-  'analyzing',
-  'validating',
-  'reporting',
-  'completed',
-]
-
 // ── Status ────────────────────────────────────────────────
-export interface StatusMeta {
-  label: string
-  /** antd Tag colour (preset or status keyword). */
-  color: string
-}
-
-export const STATUS_META: Record<ScanStatus, StatusMeta> = {
+export const STATUS_META: Record<ScanStatus, { label: string; color: string }> = {
   queued: { label: 'Queued', color: 'default' },
   provisioning: { label: 'Provisioning', color: 'processing' },
   scanning: { label: 'Scanning', color: 'processing' },
@@ -134,18 +115,20 @@ export const STATUS_META: Record<ScanStatus, StatusMeta> = {
   canceled: { label: 'Canceled', color: 'default' },
 }
 
-const RUNNING_STATUSES: ScanStatus[] = [
-  'queued',
-  'provisioning',
-  'scanning',
-  'analyzing',
-  'validating',
-  'reporting',
-]
+export const TERMINAL_STATUSES: ScanStatus[] = ['completed', 'failed', 'canceled']
 
 export function isRunning(status: ScanStatus): boolean {
-  return RUNNING_STATUSES.includes(status)
+  return !TERMINAL_STATUSES.includes(status)
 }
 
-export const APP_NAME = 'Sandbox Playground'
-export const APP_TAGLINE = 'Autonomous Pentest Console'
+// ── Event levels ──────────────────────────────────────────
+/** `timeline` is an antd Timeline preset; `hex`/`glyph` drive the raw log view. */
+export const EVENT_LEVEL_META: Record<
+  ScanEvent['level'],
+  { timeline: string; hex: string; glyph: string }
+> = {
+  info: { timeline: 'blue', hex: TEXT, glyph: '›' },
+  success: { timeline: 'green', hex: '#52c41a', glyph: '✓' },
+  warn: { timeline: 'orange', hex: '#faad14', glyph: '⚠' },
+  error: { timeline: 'red', hex: '#cf1322', glyph: '✗' },
+}

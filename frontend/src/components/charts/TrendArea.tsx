@@ -1,5 +1,5 @@
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { ACCENT_HEX } from '@/lib/constants'
+import { ACCENT_HEX, MUTED } from '@/lib/constants'
 import type { TrendPoint } from '@/types'
 
 interface TrendTooltipProps {
@@ -22,10 +22,10 @@ function TrendTooltip({ active, payload, label }: TrendTooltipProps) {
         fontSize: 12,
       }}
     >
-      <div style={{ color: 'rgba(0, 0, 0, 0.45)', marginBottom: 4 }}>{label}</div>
+      <div style={{ color: MUTED, marginBottom: 4 }}>{label}</div>
       <div>{payload[0]?.value ?? 0} findings</div>
       {point && (
-        <div style={{ color: 'rgba(0, 0, 0, 0.45)' }}>
+        <div style={{ color: MUTED }}>
           {point.critical} critical · {point.scans} scans
         </div>
       )}
@@ -43,13 +43,13 @@ export function TrendArea({ data, height = 200 }: { data: TrendPoint[]; height?:
             dataKey="label"
             tickLine={false}
             axisLine={false}
-            tick={{ fontSize: 12, fill: 'rgba(0, 0, 0, 0.45)' }}
+            tick={{ fontSize: 12, fill: MUTED }}
             dy={6}
           />
           <YAxis
             tickLine={false}
             axisLine={false}
-            tick={{ fontSize: 12, fill: 'rgba(0, 0, 0, 0.45)' }}
+            tick={{ fontSize: 12, fill: MUTED }}
             width={40}
             allowDecimals={false}
           />

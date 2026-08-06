@@ -2,10 +2,11 @@ import { useState } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { GoogleOutlined } from '@ant-design/icons'
 import { GoogleLogin } from '@react-oauth/google'
-import { Button, Card, Flex, Space, Spin, Typography } from 'antd'
+import { Button, Card, Flex, Space, Typography } from 'antd'
 import { useAuth } from '@/auth/AuthContext'
 import { toast } from '@/lib/notify'
 import { Brand } from '@/components/Brand'
+import { CenteredSpin } from '@/components/ui/CenteredSpin'
 import { APP_TAGLINE } from '@/lib/constants'
 
 export default function Login() {
@@ -17,23 +18,17 @@ export default function Login() {
 
   // Refreshing on /login with a stored session would otherwise flash the
   // sign-in card before the redirect lands.
-  if (status === 'restoring') {
-    return (
-      <Flex align="center" justify="center" style={{ minHeight: '100dvh' }}>
-        <Spin size="large" />
-      </Flex>
-    )
-  }
+  if (status === 'restoring') return <CenteredSpin />
   if (isAuthenticated) return <Navigate to={from} replace />
 
-  const handleLogin = async () => {
+  const signIn = async (attempt: () => Promise<void>, failure: string) => {
     setSubmitting(true)
     try {
-      await login()
+      await attempt()
       toast.success('Signed in to the Sandbox console')
       navigate(from, { replace: true })
     } catch {
-      toast.error('Sign-in failed', 'Could not start a session. Try again.')
+      toast.error('Sign-in failed', failure)
     } finally {
       setSubmitting(false)
     }
@@ -41,18 +36,15 @@ export default function Login() {
 
   // Google hands back an ID token (JWT) from its own rendered button; the
   // backend verifies it. Nothing is trusted from the client side here.
-  const handleGoogleCredential = async (credential?: string) => {
+  const handleGoogleCredential = (credential?: string) => {
     if (!credential || !loginWithCredential) {
       toast.error('Sign-in failed', 'Google did not return a credential.')
       return
     }
-    try {
-      await loginWithCredential(credential)
-      toast.success('Signed in to the Sandbox console')
-      navigate(from, { replace: true })
-    } catch {
-      toast.error('Sign-in failed', 'The backend rejected this credential. Try again.')
-    }
+    void signIn(
+      () => loginWithCredential(credential),
+      'The backend rejected this credential. Try again.',
+    )
   }
 
   const busy = submitting || status === 'loading'
@@ -102,7 +94,7 @@ export default function Login() {
               block
               icon={<GoogleOutlined />}
               loading={busy}
-              onClick={handleLogin}
+              onClick={() => void signIn(login, 'Could not start a session. Try again.')}
             >
               Continue with Google
             </Button>

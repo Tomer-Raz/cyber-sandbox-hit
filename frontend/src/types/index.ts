@@ -1,7 +1,4 @@
-// ============================================================
-//  Domain models — shared across the SPA.
-//  (Shapes are designed to mirror a future FastAPI contract.)
-// ============================================================
+// Domain models shared across the SPA; shapes mirror the FastAPI contract.
 
 export type Severity = 'critical' | 'high' | 'medium' | 'low' | 'info'
 
@@ -18,14 +15,8 @@ export type ScanStatus =
 
 export type ScanType = 'baseline' | 'quick' | 'full' | 'api'
 
-export type PhaseKey =
-  | 'queued'
-  | 'provisioning'
-  | 'scanning'
-  | 'analyzing'
-  | 'validating'
-  | 'reporting'
-  | 'completed'
+/** The statuses a scan passes through; the terminal failure states are not phases. */
+export type PhaseKey = Exclude<ScanStatus, 'failed' | 'canceled'>
 
 export type Confidence = 'confirmed' | 'firm' | 'tentative'
 
@@ -156,11 +147,7 @@ export interface AppUser {
 
 export const ADMIN_ROLE = 'admin'
 
-/**
- * A user as the admin console lists them. Read-only by design: every field is
- * owned by the person's Google account or by the project's GCP IAM policy, so
- * there is no edit counterpart anywhere in the SPA.
- */
+/** Read-only by design: every field is owned by Google account or GCP IAM. */
 export interface AdminUser {
   id: string
   name: string

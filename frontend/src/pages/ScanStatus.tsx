@@ -1,30 +1,23 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeftOutlined, FileTextOutlined, StopOutlined } from '@ant-design/icons'
-import { Button, Card, Flex, Popconfirm, Progress, Result, Space, Steps, Tag, Typography } from 'antd'
+import { useNavigate, useParams } from 'react-router-dom'
+import { FileTextOutlined, StopOutlined } from '@ant-design/icons'
+import { Button, Card, Flex, Popconfirm, Progress, Space, Steps, Tag, Typography } from 'antd'
 import { api, type StatusPayload } from '@/api'
 import { useScansStore } from '@/store/scansStore'
 import { toast } from '@/lib/notify'
-import { isRunning, PHASES, SCAN_TYPE_META, STATUS_META } from '@/lib/constants'
+import {
+  EVENT_LEVEL_META,
+  isRunning,
+  PHASES,
+  SCAN_TYPE_META,
+  STATUS_META,
+  TERMINAL_STATUSES,
+} from '@/lib/constants'
+import { usePolling } from '@/lib/hooks'
 import { formatClock, formatDuration, formatRelativeTime } from '@/lib/format'
 import { SeverityBar } from '@/components/charts/SeverityBar'
-import type { ScanEvent } from '@/types'
-
-const TERMINAL = ['completed', 'failed', 'canceled']
-
-const LEVEL_COLOR: Record<ScanEvent['level'], string> = {
-  info: 'rgba(0, 0, 0, 0.65)',
-  success: '#52c41a',
-  warn: '#faad14',
-  error: '#cf1322',
-}
-
-const LEVEL_GLYPH: Record<ScanEvent['level'], string> = {
-  info: '›',
-  success: '✓',
-  warn: '⚠',
-  error: '✗',
-}
+import { PageHeader } from '@/components/ui/PageHeader'
+import { ResultPage } from '@/components/ui/ResultPage'
 
 export default function ScanStatus() {
   const { id } = useParams<{ id: string }>()
@@ -34,33 +27,29 @@ export default function ScanStatus() {
   const [error, setError] = useState<string | null>(null)
   const logRef = useRef<HTMLDivElement>(null)
 
+  // Navigating between two scan routes reuses this component, so clear the
+  // previous scan's data rather than showing it under the new id.
   useEffect(() => {
-    if (!id) return
-    let alive = true
-    let iv: ReturnType<typeof setInterval> | undefined
-    const tick = async () => {
+    setData(null)
+    setError(null)
+  }, [id])
+
+  usePolling(
+    async () => {
+      if (!id) return false
       try {
         const d = await api.getScanStatus(id)
-        if (!alive) return
         setData(d)
         upsert(d.scan)
-        if (TERMINAL.includes(d.scan.status) && iv) {
-          clearInterval(iv)
-          iv = undefined
-        }
+        return !TERMINAL_STATUSES.includes(d.scan.status)
       } catch (e) {
-        if (!alive) return
         setError(e instanceof Error ? e.message : 'Scan not found')
-        if (iv) clearInterval(iv)
+        return false
       }
-    }
-    tick()
-    iv = setInterval(tick, 1500)
-    return () => {
-      alive = false
-      if (iv) clearInterval(iv)
-    }
-  }, [id, upsert])
+    },
+    1500,
+    [id],
+  )
 
   // Keep the log pinned to the newest line.
   useEffect(() => {
@@ -81,15 +70,11 @@ export default function ScanStatus() {
 
   if (error) {
     return (
-      <Result
+      <ResultPage
         status="404"
         title="Scan not found"
         subTitle={error}
-        extra={
-          <Button type="primary" onClick={() => navigate('/scans')}>
-            Back to scans
-          </Button>
-        }
+        actions={[{ label: 'Back to scans', to: '/scans', primary: true }]}
       />
     )
   }
@@ -99,7 +84,6 @@ export default function ScanStatus() {
   const { scan, events } = data
   const running = isRunning(scan.status)
   const done = scan.status === 'completed'
-  const meta = SCAN_TYPE_META[scan.scanType]
 
   const phaseIndex = done
     ? PHASES.length
@@ -110,45 +94,39 @@ export default function ScanStatus() {
 
   return (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
-      <Flex wrap gap={16} align="flex-end" justify="space-between">
-        <div style={{ minWidth: 0 }}>
-          <Link to="/scans">
-            <ArrowLeftOutlined /> Scans
-          </Link>
-          <Typography.Title level={4} style={{ margin: '8px 0 4px' }}>
-            {scan.name}
-          </Typography.Title>
-          <Typography.Text type="secondary" style={{ wordBreak: 'break-all' }}>
-            {scan.target} · {meta.label} · {scan.region}
-          </Typography.Text>
-        </div>
-        <Space wrap>
-          <Tag color={STATUS_META[scan.status].color}>{STATUS_META[scan.status].label}</Tag>
-          {running && (
-            <Popconfirm
-              title="Cancel this scan?"
-              description="The container is torn down immediately and partial results discarded."
-              okText="Cancel scan"
-              okButtonProps={{ danger: true }}
-              cancelText="Keep running"
-              onConfirm={handleCancel}
-            >
-              <Button danger icon={<StopOutlined />}>
-                Cancel
+      <PageHeader
+        back={{ to: '/scans', label: 'Scans' }}
+        title={scan.name}
+        subtitle={`${scan.target} · ${SCAN_TYPE_META[scan.scanType].label} · ${scan.region}`}
+        extra={
+          <>
+            <Tag color={STATUS_META[scan.status].color}>{STATUS_META[scan.status].label}</Tag>
+            {running && (
+              <Popconfirm
+                title="Cancel this scan?"
+                description="The container is torn down immediately and partial results discarded."
+                okText="Cancel scan"
+                okButtonProps={{ danger: true }}
+                cancelText="Keep running"
+                onConfirm={handleCancel}
+              >
+                <Button danger icon={<StopOutlined />}>
+                  Cancel
+                </Button>
+              </Popconfirm>
+            )}
+            {done && (
+              <Button
+                type="primary"
+                icon={<FileTextOutlined />}
+                onClick={() => navigate(`/scans/${scan.id}/report`)}
+              >
+                View report
               </Button>
-            </Popconfirm>
-          )}
-          {done && (
-            <Button
-              type="primary"
-              icon={<FileTextOutlined />}
-              onClick={() => navigate(`/scans/${scan.id}/report`)}
-            >
-              View report
-            </Button>
-          )}
-        </Space>
-      </Flex>
+            )}
+          </>
+        }
+      />
 
       {done && (
         <Card>
@@ -181,13 +159,7 @@ export default function ScanStatus() {
         <Progress
           percent={scan.progress}
           status={
-            scan.status === 'failed'
-              ? 'exception'
-              : done
-                ? 'success'
-                : running
-                  ? 'active'
-                  : 'normal'
+            scan.status === 'failed' ? 'exception' : done ? 'success' : running ? 'active' : 'normal'
           }
         />
 
@@ -215,19 +187,20 @@ export default function ScanStatus() {
           className="mono"
           style={{ maxHeight: 340, overflowY: 'auto', padding: 16, fontSize: 12, lineHeight: 1.9 }}
         >
-          {events.map((ev) => (
-            <div key={ev.id} style={{ display: 'flex', gap: 10 }}>
-              <span style={{ color: 'rgba(0, 0, 0, 0.35)', flexShrink: 0 }}>
-                {formatClock(ev.ts)}
-              </span>
-              <span style={{ color: LEVEL_COLOR[ev.level], flexShrink: 0 }}>
-                {LEVEL_GLYPH[ev.level]}
-              </span>
-              <span style={{ color: LEVEL_COLOR[ev.level], minWidth: 0, wordBreak: 'break-word' }}>
-                {ev.message}
-              </span>
-            </div>
-          ))}
+          {events.map((ev) => {
+            const level = EVENT_LEVEL_META[ev.level]
+            return (
+              <div key={ev.id} style={{ display: 'flex', gap: 10 }}>
+                <span style={{ color: 'rgba(0, 0, 0, 0.35)', flexShrink: 0 }}>
+                  {formatClock(ev.ts)}
+                </span>
+                <span style={{ color: level.hex, flexShrink: 0 }}>{level.glyph}</span>
+                <span style={{ color: level.hex, minWidth: 0, wordBreak: 'break-word' }}>
+                  {ev.message}
+                </span>
+              </div>
+            )
+          })}
         </div>
       </Card>
     </Space>

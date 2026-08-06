@@ -15,41 +15,11 @@ interface FormValues extends ScanOptions {
   authorized: boolean
 }
 
-function defaultsFor(type: ScanType): ScanOptions {
-  switch (type) {
-    case 'baseline':
-      return {
-        activeScan: false,
-        ajaxSpider: false,
-        aiCveMatching: true,
-        exploitValidation: false,
-        maxDepth: 3,
-      }
-    case 'quick':
-      return {
-        activeScan: true,
-        ajaxSpider: false,
-        aiCveMatching: true,
-        exploitValidation: false,
-        maxDepth: 4,
-      }
-    case 'api':
-      return {
-        activeScan: true,
-        ajaxSpider: false,
-        aiCveMatching: true,
-        exploitValidation: true,
-        maxDepth: 6,
-      }
-    default:
-      return {
-        activeScan: true,
-        ajaxSpider: true,
-        aiCveMatching: true,
-        exploitValidation: true,
-        maxDepth: 5,
-      }
-  }
+const DEFAULTS: Record<ScanType, ScanOptions> = {
+  baseline: { activeScan: false, ajaxSpider: false, aiCveMatching: true, exploitValidation: false, maxDepth: 3 },
+  quick: { activeScan: true, ajaxSpider: false, aiCveMatching: true, exploitValidation: false, maxDepth: 4 },
+  api: { activeScan: true, ajaxSpider: false, aiCveMatching: true, exploitValidation: true, maxDepth: 6 },
+  full: { activeScan: true, ajaxSpider: true, aiCveMatching: true, exploitValidation: true, maxDepth: 5 },
 }
 
 const isValidTarget = (t: string) =>
@@ -81,24 +51,18 @@ export default function NewScan() {
     name: '',
     scanType: 'full',
     authorized: false,
-    ...defaultsFor('full'),
+    ...DEFAULTS.full,
   }
 
-  const onFinish = async (v: FormValues) => {
+  const onFinish = async ({ name, target, scanType: type, authorized, ...options }: FormValues) => {
     setSubmitting(true)
     try {
       const scan = await api.createScan({
-        name: v.name?.trim() ?? '',
-        target: v.target.trim(),
-        scanType: v.scanType,
-        options: {
-          activeScan: v.activeScan,
-          ajaxSpider: v.ajaxSpider,
-          aiCveMatching: v.aiCveMatching,
-          exploitValidation: v.exploitValidation,
-          maxDepth: v.maxDepth,
-        },
-        authorized: v.authorized,
+        name: name?.trim() ?? '',
+        target: target.trim(),
+        scanType: type,
+        options,
+        authorized,
       })
       upsert(scan)
       toast.success('Scan queued', `${meta.label} scan launched against ${scan.target}`)
@@ -145,7 +109,7 @@ export default function NewScan() {
         <Card title="Scan profile">
           <Form.Item name="scanType" label="Profile">
             <Select
-              onChange={(type: ScanType) => form.setFieldsValue(defaultsFor(type))}
+              onChange={(type: ScanType) => form.setFieldsValue(DEFAULTS[type])}
               options={SCAN_TYPES.map((t) => ({
                 value: t,
                 label: `${SCAN_TYPE_META[t].label} · ${SCAN_TYPE_META[t].tagline}`,

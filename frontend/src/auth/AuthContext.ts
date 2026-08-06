@@ -1,12 +1,9 @@
 import { createContext, useContext } from 'react'
 import type { AppUser } from '@/types'
 
-/**
- * `restoring` is the page-load state: a stored credential exists and is being
- * revalidated. It is distinct from `loading` (an in-flight sign-in the user
- * just triggered) because guards must wait it out rather than treat it as
- * signed-out — otherwise a refresh bounces to /login.
- */
+// `restoring` (revalidating a stored credential on load) is distinct from
+// `loading` (a sign-in the user just triggered): guards must wait `restoring`
+// out rather than treat it as signed-out, or a refresh bounces to /login.
 export type AuthStatus = 'idle' | 'restoring' | 'loading' | 'authenticated'
 
 export interface AuthContextValue {
@@ -14,19 +11,11 @@ export interface AuthContextValue {
   isAuthenticated: boolean
   status: AuthStatus
   mode: 'mock' | 'google'
-  /**
-   * Programmatic sign-in. Available in mock mode only — Google's ID-token flow
-   * requires their own rendered button, so google mode exposes
-   * `loginWithCredential` instead and rejects this call.
-   */
+  /** Mock mode only; google mode rejects this and exposes loginWithCredential. */
   login: () => Promise<void>
   logout: () => void
   getToken: () => string | null
-  /**
-   * Completes sign-in from a Google ID token (JWT). Present in google mode.
-   * Sends the token to the backend, which verifies it and returns the
-   * canonical user record — nothing here is trusted client-side alone.
-   */
+  /** Google mode: hands the ID token to the backend, which verifies it. */
   loginWithCredential?: (credential: string) => Promise<void>
 }
 

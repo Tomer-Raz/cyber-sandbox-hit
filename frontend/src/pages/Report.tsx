@@ -1,39 +1,21 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeftOutlined, DownloadOutlined, FilePdfOutlined } from '@ant-design/icons'
-import {
-  Button,
-  Card,
-  Col,
-  Flex,
-  Progress,
-  Result,
-  Row,
-  Space,
-  Statistic,
-  Timeline,
-  Typography,
-} from 'antd'
+import { useParams } from 'react-router-dom'
+import { DownloadOutlined, FilePdfOutlined } from '@ant-design/icons'
+import { Button, Card, Col, Flex, Progress, Row, Space, Statistic, Timeline, Typography } from 'antd'
 import { api } from '@/api'
 import { toast } from '@/lib/notify'
-import { SCAN_TYPE_META, SEVERITY_META } from '@/lib/constants'
+import { EVENT_LEVEL_META, SCAN_TYPE_META, SEVERITY_META } from '@/lib/constants'
 import { formatDateTime, riskBand } from '@/lib/format'
-import type { ScanEvent, ScanReport } from '@/types'
+import type { ScanReport } from '@/types'
 import { FindingsByCategoryBar } from '@/components/charts/FindingsByCategoryBar'
 import { SeverityBar } from '@/components/charts/SeverityBar'
 import { SeverityDonut } from '@/components/charts/SeverityDonut'
 import { FindingsTable } from '@/components/scans/FindingsTable'
-
-const TIMELINE_COLOR: Record<ScanEvent['level'], string> = {
-  info: 'blue',
-  success: 'green',
-  warn: 'orange',
-  error: 'red',
-}
+import { PageHeader } from '@/components/ui/PageHeader'
+import { ResultPage } from '@/components/ui/ResultPage'
 
 export default function Report() {
   const { id } = useParams<{ id: string }>()
-  const navigate = useNavigate()
   const [report, setReport] = useState<ScanReport | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -49,15 +31,11 @@ export default function Report() {
 
   if (error) {
     return (
-      <Result
+      <ResultPage
         status="404"
         title="Report unavailable"
         subTitle={error}
-        extra={
-          <Button type="primary" onClick={() => navigate('/scans')}>
-            Back to scans
-          </Button>
-        }
+        actions={[{ label: 'Back to scans', to: '/scans', primary: true }]}
       />
     )
   }
@@ -68,25 +46,17 @@ export default function Report() {
 
   if (scan.status !== 'completed') {
     return (
-      <Result
+      <ResultPage
         status="info"
         title="Scan still in progress"
         subTitle="The full report becomes available once the scan completes."
-        extra={
-          <Button type="primary" onClick={() => navigate(`/scans/${scan.id}`)}>
-            View live progress
-          </Button>
-        }
+        actions={[{ label: 'View live progress', to: `/scans/${scan.id}`, primary: true }]}
       />
     )
   }
 
   const band = riskBand(scan.riskScore)
   const bandHex = SEVERITY_META[band.tone].hex
-  const meta = SCAN_TYPE_META[scan.scanType]
-  const validated = findings.filter((f) => f.validated).length
-  const cves = new Set(findings.flatMap((f) => f.cveIds)).size
-  const criticalHigh = scan.counts.critical + scan.counts.high
 
   const exportJson = () => {
     const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' })
@@ -104,35 +74,49 @@ export default function Report() {
     setTimeout(() => window.print(), 350)
   }
 
+  const breakdown = [
+    { title: 'Total findings', value: findings.length },
+    {
+      title: 'Critical + High',
+      value: scan.counts.critical + scan.counts.high,
+      color: SEVERITY_META.critical.hex,
+    },
+    {
+      title: 'Validated',
+      value: findings.filter((f) => f.validated).length,
+      color: SEVERITY_META.low.hex,
+    },
+    { title: 'CVEs matched', value: new Set(findings.flatMap((f) => f.cveIds)).size },
+  ]
+
   return (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
-      <Flex wrap gap={16} align="flex-end" justify="space-between">
-        <div style={{ minWidth: 0 }}>
-          <Link to={`/scans/${scan.id}`}>
-            <ArrowLeftOutlined /> Scan
-          </Link>
-          <Typography.Title level={4} style={{ margin: '8px 0 4px' }}>
-            {scan.name}
-          </Typography.Title>
-          <Typography.Text type="secondary" style={{ wordBreak: 'break-all' }}>
-            {scan.target} · {meta.label} · completed {formatDateTime(scan.completedAt)}
-          </Typography.Text>
-        </div>
-        <Space wrap>
-          <Button icon={<DownloadOutlined />} onClick={exportJson}>
-            JSON
-          </Button>
-          <Button icon={<FilePdfOutlined />} onClick={exportPdf}>
-            PDF
-          </Button>
-        </Space>
-      </Flex>
+      <PageHeader
+        back={{ to: `/scans/${scan.id}`, label: 'Scan' }}
+        title={scan.name}
+        subtitle={`${scan.target} · ${SCAN_TYPE_META[scan.scanType].label} · completed ${formatDateTime(scan.completedAt)}`}
+        extra={
+          <>
+            <Button icon={<DownloadOutlined />} onClick={exportJson}>
+              JSON
+            </Button>
+            <Button icon={<FilePdfOutlined />} onClick={exportPdf}>
+              PDF
+            </Button>
+          </>
+        }
+      />
 
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={8}>
           <Card title="Risk posture" style={{ height: '100%' }}>
             <Flex wrap gap={20} align="center">
-              <Progress type="dashboard" percent={scan.riskScore} strokeColor={bandHex} size={120} />
+              <Progress
+                type="dashboard"
+                percent={scan.riskScore}
+                strokeColor={bandHex}
+                size={120}
+              />
               <div style={{ minWidth: 160, flex: 1 }}>
                 <Typography.Title level={5} style={{ margin: 0, color: bandHex }}>
                   {band.label}
@@ -151,32 +135,25 @@ export default function Report() {
         <Col xs={24} lg={8}>
           <Card title="Breakdown" style={{ height: '100%' }}>
             <Row gutter={[16, 16]}>
-              <Col xs={12}>
-                <Statistic title="Total findings" value={findings.length} />
-              </Col>
-              <Col xs={12}>
-                <Statistic
-                  title="Critical + High"
-                  value={criticalHigh}
-                  valueStyle={{ color: SEVERITY_META.critical.hex }}
-                />
-              </Col>
-              <Col xs={12}>
-                <Statistic
-                  title="Validated"
-                  value={validated}
-                  valueStyle={{ color: SEVERITY_META.low.hex }}
-                />
-              </Col>
-              <Col xs={12}>
-                <Statistic title="CVEs matched" value={cves} />
-              </Col>
+              {breakdown.map((b) => (
+                <Col xs={12} key={b.title}>
+                  <Statistic
+                    title={b.title}
+                    value={b.value}
+                    valueStyle={b.color ? { color: b.color } : undefined}
+                  />
+                </Col>
+              ))}
             </Row>
           </Card>
         </Col>
 
         <Col xs={24} lg={8}>
-          <Card title="AI analysis" extra={<Typography.Text type="secondary">Vertex AI</Typography.Text>} style={{ height: '100%' }}>
+          <Card
+            title="AI analysis"
+            extra={<Typography.Text type="secondary">Vertex AI</Typography.Text>}
+            style={{ height: '100%' }}
+          >
             <Typography.Text strong>{ai.headline}</Typography.Text>
             <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginTop: 8 }}>
               {ai.summary}
@@ -224,7 +201,7 @@ export default function Report() {
         <Timeline
           items={events.map((ev) => ({
             key: ev.id,
-            color: TIMELINE_COLOR[ev.level],
+            color: EVENT_LEVEL_META[ev.level].timeline,
             children: (
               <Space size={8} wrap>
                 <Typography.Text type="secondary" style={{ fontSize: 12 }}>

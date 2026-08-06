@@ -14,7 +14,7 @@ import type { MenuProps } from 'antd'
 import { Avatar, Button, Drawer, Dropdown, Grid, Layout, Menu, Space, Tag, Typography } from 'antd'
 import { useAuth } from '@/auth/AuthContext'
 import { Brand } from '@/components/Brand'
-import { APP_NAME } from '@/lib/constants'
+import { ACCENT_HEX, APP_NAME } from '@/lib/constants'
 import { ADMIN_ROLE } from '@/types'
 
 const { Header, Sider, Content } = Layout
@@ -36,26 +36,20 @@ const ADMIN_NAV_ITEMS: NavItems = [
   { key: '/admin/scans', icon: <AuditOutlined />, label: 'All Scans' },
 ]
 
-function selectedKey(pathname: string): string {
-  if (pathname === '/') return '/'
-  if (pathname.startsWith('/admin/users')) return '/admin/users'
-  if (pathname.startsWith('/admin/scans')) return '/admin/scans'
-  if (pathname === '/scans/new') return '/scans/new'
-  if (pathname.startsWith('/scans')) return '/scans'
-  if (pathname.startsWith('/settings')) return '/settings'
-  return pathname
-}
+// Ordered most-specific first; maps a path to both its menu key and header title.
+const ROUTES: { match: (p: string) => boolean; key: string; title: string }[] = [
+  { match: (p) => p === '/', key: '/', title: 'Overview' },
+  { match: (p) => p.startsWith('/admin/users'), key: '/admin/users', title: 'Users' },
+  { match: (p) => p.startsWith('/admin/scans'), key: '/admin/scans', title: 'All Scans' },
+  { match: (p) => p === '/scans/new', key: '/scans/new', title: 'New Scan' },
+  { match: (p) => p.endsWith('/report'), key: '/scans', title: 'Scan Report' },
+  { match: (p) => p === '/scans', key: '/scans', title: 'Scans' },
+  { match: (p) => p.startsWith('/scans'), key: '/scans', title: 'Scan Progress' },
+  { match: (p) => p.startsWith('/settings'), key: '/settings', title: 'Settings' },
+]
 
-function routeTitle(pathname: string): string {
-  if (pathname === '/') return 'Overview'
-  if (pathname === '/scans') return 'Scans'
-  if (pathname === '/scans/new') return 'New Scan'
-  if (pathname === '/admin/users') return 'Users'
-  if (pathname === '/admin/scans') return 'All Scans'
-  if (pathname.endsWith('/report')) return 'Scan Report'
-  if (pathname.startsWith('/scans/')) return 'Scan Progress'
-  if (pathname === '/settings') return 'Settings'
-  return APP_NAME
+function routeFor(pathname: string) {
+  return ROUTES.find((r) => r.match(pathname)) ?? { key: pathname, title: APP_NAME }
 }
 
 const HAIRLINE = '1px solid rgba(5, 5, 5, 0.06)'
@@ -75,11 +69,12 @@ export function AppLayout() {
   }
 
   const isAdmin = user?.role === ADMIN_ROLE
+  const route = routeFor(location.pathname)
 
   const nav = (
     <Menu
       mode="inline"
-      selectedKeys={[selectedKey(location.pathname)]}
+      selectedKeys={[route.key]}
       items={isAdmin ? [...NAV_ITEMS, ...ADMIN_NAV_ITEMS] : NAV_ITEMS}
       onClick={handleNav}
       style={{ borderInlineEnd: 'none' }}
@@ -155,12 +150,12 @@ export function AppLayout() {
             />
           )}
           <Typography.Title level={5} style={{ margin: 0, flex: 1, lineHeight: 1.4 }} ellipsis>
-            {routeTitle(location.pathname)}
+            {route.title}
           </Typography.Title>
           <Dropdown menu={{ items: userMenu }} trigger={['click']}>
             <Button type="text" style={{ height: 48, paddingInline: 8 }}>
               <Space size={8}>
-                <Avatar size="small" style={{ backgroundColor: '#1677ff' }}>
+                <Avatar size="small" style={{ backgroundColor: ACCENT_HEX }}>
                   {user?.initials}
                 </Avatar>
                 {!isMobile && <span>{user?.name}</span>}

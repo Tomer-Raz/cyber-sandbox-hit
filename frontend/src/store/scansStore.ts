@@ -9,10 +9,9 @@ interface ScansState {
   error: string | null
   fetchScans: (opts?: { silent?: boolean }) => Promise<void>
   upsert: (scan: Scan) => void
-  getById: (id: string) => Scan | undefined
 }
 
-export const useScansStore = create<ScansState>((set, get) => ({
+export const useScansStore = create<ScansState>((set) => ({
   scans: [],
   loading: false,
   loaded: false,
@@ -36,6 +35,4 @@ export const useScansStore = create<ScansState>((set, get) => ({
       next[idx] = scan
       return { scans: next }
     }),
-
-  getById: (id) => get().scans.find((s) => s.id === id),
 }))
