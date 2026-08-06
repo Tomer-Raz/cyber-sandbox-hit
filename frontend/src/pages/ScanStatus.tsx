@@ -51,10 +51,19 @@ export default function ScanStatus() {
     [id],
   )
 
-  // Keep the log pinned to the newest line.
+  // Keep the log pinned to the newest line, unless the user has scrolled up to
+  // read — polling every 1.5s would otherwise yank them back down mid-read.
+  const followTail = useRef(true)
+
   useEffect(() => {
-    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight
+    const el = logRef.current
+    if (el && followTail.current) el.scrollTop = el.scrollHeight
   }, [data?.events.length])
+
+  const handleLogScroll = () => {
+    const el = logRef.current
+    if (el) followTail.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24
+  }
 
   const handleCancel = async () => {
     if (!id) return
@@ -177,15 +186,16 @@ export default function ScanStatus() {
         title="Execution log"
         extra={
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            {running ? 'streaming' : `${events.length} lines`}
+            {running ? `streaming · ${events.length} lines` : `${events.length} lines`}
           </Typography.Text>
         }
         styles={{ body: { padding: 0 } }}
       >
         <div
           ref={logRef}
+          onScroll={handleLogScroll}
           className="mono"
-          style={{ maxHeight: 340, overflowY: 'auto', padding: 16, fontSize: 12, lineHeight: 1.9 }}
+          style={{ maxHeight: 520, overflowY: 'auto', padding: 16, fontSize: 12, lineHeight: 1.9 }}
         >
           {events.map((ev) => {
             const level = EVENT_LEVEL_META[ev.level]

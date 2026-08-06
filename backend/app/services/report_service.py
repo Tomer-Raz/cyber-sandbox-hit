@@ -12,7 +12,7 @@ from app.models.scan_config import ScanConfig
 from app.models.user import User
 from app.schemas.report import ReportAiInsight, ReportFinding, ScanReport
 from app.schemas.scan import ScanEvent, SeverityCounts
-from app.services import finding_stats_service
+from app.services import finding_stats_service, log_service
 from app.services.scan_access import get_readable_scan
 
 _AI_RESULTS_COLLECTION = "ai_results"
@@ -128,15 +128,20 @@ def _ai_insight(findings: list[ReportFinding], counts: dict[str, int]) -> Report
 
 
 async def scan_events(scan: Scan) -> list[ScanEvent]:
-    """Audit trail for one scan, oldest first.
+    """Full execution log for one scan, oldest first.
 
-    Queried on scan_id alone and sorted here rather than with an order_by, so
-    this needs no extra Firestore composite index (§6 defines none for it).
+    Interleaves the API-side lifecycle trail (audit_events, written when a user
+    starts or cancels a scan) with the scanner worker's step-by-step log
+    (scan_logs). audit_events is queried on scan_id alone and the merged list
+    is sorted here, so the cross-collection interleave needs no extra Firestore
+    composite index beyond the two §6 already defines.
     """
+    scan_id = str(scan.id)
     try:
         client = get_firestore_client()
-        query = client.collection(_AUDIT_EVENTS_COLLECTION).where("scan_id", "==", str(scan.id))
-        rows = [doc.to_dict() async for doc in query.stream()]
+        query = client.collection(_AUDIT_EVENTS_COLLECTION).where("scan_id", "==", scan_id)
+        audit_rows = [doc.to_dict() async for doc in query.stream()]
+        worker_rows = await log_service.get_scan_logs(scan_id)
     except Exception:  # noqa: BLE001 - the report is still useful without the trail
         return []
 
@@ -144,9 +149,20 @@ async def scan_events(scan: Scan) -> list[ScanEvent]:
         ScanEvent(
             timestamp=row["timestamp"],
             action=row.get("action", "event"),
+            message=row.get("action", "event").replace("_", " "),
             level="error" if "fail" in row.get("action", "") else "info",
         )
-        for row in rows
+        for row in audit_rows
+        if row.get("timestamp")
+    ]
+    events += [
+        ScanEvent(
+            timestamp=row["timestamp"],
+            action=row.get("event_type", "event"),
+            message=row.get("message", ""),
+            level=row.get("level", "info"),
+        )
+        for row in worker_rows
         if row.get("timestamp")
     ]
     return sorted(events, key=lambda e: e.timestamp)

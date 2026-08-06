@@ -44,10 +44,11 @@ class ScanOut(BaseModel):
 
 
 class ScanEvent(BaseModel):
-    """One entry of a scan's audit trail, oldest first."""
+    """One line of a scan's execution log, oldest first."""
 
     timestamp: datetime
     action: str
+    message: str = ""
     level: str = "info"
 
 
