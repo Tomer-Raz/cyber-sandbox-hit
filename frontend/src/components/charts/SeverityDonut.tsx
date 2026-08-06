@@ -1,5 +1,5 @@
 import { Cell, Pie, PieChart, ResponsiveContainer } from 'recharts'
-import { SEVERITY_META, SEVERITY_ORDER } from '@/lib/constants'
+import { MUTED, SEVERITY_META, SEVERITY_ORDER } from '@/lib/constants'
 import type { SeverityCounts } from '@/types'
 
 interface Slice {
@@ -55,7 +55,7 @@ export function SeverityDonut({ counts, size = 200 }: { counts: SeverityCounts; 
       >
         <div>
           <div style={{ fontSize: 28, fontWeight: 600, lineHeight: 1.15 }}>{total}</div>
-          <div style={{ fontSize: 12, color: 'rgba(0, 0, 0, 0.45)' }}>findings</div>
+          <div style={{ fontSize: 12, color: MUTED }}>findings</div>
         </div>
       </div>
     </div>

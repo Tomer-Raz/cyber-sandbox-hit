@@ -9,14 +9,6 @@ import type {
 } from '@/types'
 import { http } from './client'
 import * as engine from './mock/engine'
-import type {
-  ApiAdminScan,
-  ApiAdminUser,
-  ApiDashboard,
-  ApiScan,
-  ApiScanReport,
-  ApiScanEvent,
-} from './adapters'
 import {
   toAdminScan,
   toAdminUser,
@@ -25,18 +17,31 @@ import {
   toScan,
   toScanEvent,
   toScanReport,
+  type ApiAdminScan,
+  type ApiAdminUser,
+  type ApiDashboard,
+  type ApiScan,
+  type ApiScanEvent,
+  type ApiScanReport,
 } from './adapters'
 
 const USE_MOCKS = (import.meta.env.VITE_USE_MOCKS ?? 'true') !== 'false'
 
-// Simulated network latency so the mock feels like a real backend.
 function delay<T>(value: T, min = 220, max = 520): Promise<T> {
-  const ms = min + Math.random() * (max - min)
-  return new Promise((resolve) => setTimeout(() => resolve(value), ms))
+  return new Promise((resolve) => setTimeout(() => resolve(value), min + Math.random() * (max - min)))
 }
 
-function notFound(id: string): never {
-  throw new Error(`Scan ${id} not found`)
+// Async so a missing mock scan rejects rather than throwing synchronously.
+async function route<T>(
+  mock: () => T | undefined,
+  live: () => Promise<T>,
+  id?: string,
+  range?: [number, number],
+): Promise<T> {
+  if (!USE_MOCKS) return live()
+  const value = mock()
+  if (value == null) throw new Error(`Scan ${id} not found`)
+  return delay(value, ...(range ?? []))
 }
 
 export interface StatusPayload {
@@ -44,42 +49,39 @@ export interface StatusPayload {
   events: ScanEvent[]
 }
 
-// ── Public API ────────────────────────────────────────────
-// Each call branches: mock engine (default) or live FastAPI backend.
-// Collection routes keep their trailing slash: without it FastAPI answers a
-// 307 whose Location the browser refuses to follow from an https:// page.
+// Collection routes keep their trailing slash: without it FastAPI answers a 307
+// whose Location the browser refuses to follow from an https:// page.
 export const api = {
-  async getDashboard(): Promise<DashboardStats> {
-    if (USE_MOCKS) return delay(engine.dashboardStats())
-    const { data } = await http.get<ApiDashboard>('/dashboard')
-    return toDashboardStats(data)
-  },
+  getDashboard: (): Promise<DashboardStats> =>
+    route(engine.dashboardStats, async () =>
+      toDashboardStats((await http.get<ApiDashboard>('/dashboard')).data),
+    ),
 
-  async listScans(): Promise<Scan[]> {
-    if (USE_MOCKS) return delay(engine.listScans())
-    const { data } = await http.get<ApiScan[]>('/scans/')
-    return data.map(toScan)
-  },
+  listScans: (): Promise<Scan[]> =>
+    route(engine.listScans, async () => (await http.get<ApiScan[]>('/scans/')).data.map(toScan)),
 
-  async getScan(id: string): Promise<Scan> {
-    if (USE_MOCKS) return delay(engine.getScan(id) ?? notFound(id))
-    const { data } = await http.get<ApiScan>(`/scans/${id}`)
-    return toScan(data)
-  },
+  getScan: (id: string): Promise<Scan> =>
+    route(() => engine.getScan(id), async () => toScan((await http.get<ApiScan>(`/scans/${id}`)).data), id),
 
-  async getScanStatus(id: string): Promise<StatusPayload> {
-    if (USE_MOCKS) return delay(engine.getStatusPayload(id) ?? notFound(id), 120, 280)
-    const { data } = await http.get<{ scan: ApiScan; events: ApiScanEvent[] }>(
-      `/scans/${id}/status`,
-    )
-    return { scan: toScan(data.scan), events: data.events.map(toScanEvent) }
-  },
+  getScanStatus: (id: string): Promise<StatusPayload> =>
+    route(
+      () => engine.getStatusPayload(id),
+      async () => {
+        const { data } = await http.get<{ scan: ApiScan; events: ApiScanEvent[] }>(
+          `/scans/${id}/status`,
+        )
+        return { scan: toScan(data.scan), events: data.events.map(toScanEvent) }
+      },
+      id,
+      [120, 280],
+    ),
 
-  async getReport(id: string): Promise<ScanReport> {
-    if (USE_MOCKS) return delay(engine.getReport(id) ?? notFound(id))
-    const { data } = await http.get<ApiScanReport>(`/scans/${id}/report`)
-    return toScanReport(data)
-  },
+  getReport: (id: string): Promise<ScanReport> =>
+    route(
+      () => engine.getReport(id),
+      async () => toScanReport((await http.get<ApiScanReport>(`/scans/${id}/report`)).data),
+      id,
+    ),
 
   async createScan(req: ScanRequest): Promise<Scan> {
     if (USE_MOCKS) return delay(engine.createScan(req), 500, 900)
@@ -98,28 +100,25 @@ export const api = {
     return toScan(data)
   },
 
-  async cancelScan(id: string): Promise<Scan> {
-    if (USE_MOCKS) return delay(engine.cancelScan(id) ?? notFound(id))
-    await http.delete(`/scans/${id}`)
-    return this.getScan(id)
+  cancelScan(id: string): Promise<Scan> {
+    return route(
+      () => engine.cancelScan(id),
+      async () => {
+        await http.delete(`/scans/${id}`)
+        return this.getScan(id)
+      },
+      id,
+    )
   },
 
-  // ── Admin ───────────────────────────────────────────────
-  // Read-only. The backend rejects these with 403 for anyone who does not hold
-  // the admin role in GCP IAM, so the nav-level check in the SPA is
-  // convenience, not the actual gate.
+  // The backend 403s these without the admin role; the nav check is convenience.
+  listAdminUsers: (): Promise<AdminUser[]> =>
+    route(engine.adminUsers, async () =>
+      (await http.get<ApiAdminUser[]>('/admin/users')).data.map(toAdminUser),
+    ),
 
-  async listAdminUsers(): Promise<AdminUser[]> {
-    if (USE_MOCKS) return delay(engine.adminUsers())
-    const { data } = await http.get<ApiAdminUser[]>('/admin/users')
-    return data.map(toAdminUser)
-  },
-
-  async listAdminScans(): Promise<AdminScan[]> {
-    if (USE_MOCKS) return delay(engine.adminScans())
-    const { data } = await http.get<ApiAdminScan[]>('/admin/scans')
-    return data.map(toAdminScan)
-  },
+  listAdminScans: (): Promise<AdminScan[]> =>
+    route(engine.adminScans, async () =>
+      (await http.get<ApiAdminScan[]>('/admin/scans')).data.map(toAdminScan),
+    ),
 }
-
-export type Api = typeof api

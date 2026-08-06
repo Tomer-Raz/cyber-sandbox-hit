@@ -5,9 +5,7 @@ import { AuthContext, type AuthContextValue, type AuthStatus } from './AuthConte
 
 const STORAGE_KEY = 'sbx.auth.session'
 
-// `role` is what gates the admin routes, so it holds a real role name rather
-// than a job title — and the demo user is an admin so the admin console is
-// reachable when demoing without a backend.
+// Admin so the admin console stays reachable when demoing without a backend.
 const DEMO_USER: AppUser = {
   id: 'usr_john',
   name: 'John Doe',

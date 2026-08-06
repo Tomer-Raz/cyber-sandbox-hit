@@ -1,9 +1,9 @@
 import { lazy, Suspense } from 'react'
 import { Route, Routes } from 'react-router-dom'
-import { Spin } from 'antd'
 import { RequireAdmin } from '@/auth/RequireAdmin'
 import { RequireAuth } from '@/auth/RequireAuth'
 import { AppLayout } from '@/components/layout/AppLayout'
+import { CenteredSpin } from '@/components/ui/CenteredSpin'
 import Login from '@/pages/Login'
 
 // Route-level code splitting keeps recharts and the heavier pages
@@ -18,17 +18,9 @@ const AdminUsers = lazy(() => import('@/pages/admin/Users'))
 const AdminScans = lazy(() => import('@/pages/admin/Scans'))
 const NotFound = lazy(() => import('@/pages/NotFound'))
 
-function PageFallback() {
-  return (
-    <div style={{ display: 'grid', placeItems: 'center', minHeight: '50vh' }}>
-      <Spin size="large" />
-    </div>
-  )
-}
-
 export default function App() {
   return (
-    <Suspense fallback={<PageFallback />}>
+    <Suspense fallback={<CenteredSpin minHeight="50vh" />}>
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route

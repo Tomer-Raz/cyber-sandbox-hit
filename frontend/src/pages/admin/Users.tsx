@@ -1,24 +1,22 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Alert, Input, Space, Table, Tag, Typography } from 'antd'
+import { useEffect, useState } from 'react'
+import { Alert, Space, Tag } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { api } from '@/api'
 import { formatDateTime, formatRelativeTime } from '@/lib/format'
+import { filterBySearch } from '@/lib/hooks'
 import { toast } from '@/lib/notify'
 import { ADMIN_ROLE, type AdminUser } from '@/types'
+import { DataTable } from '@/components/ui/DataTable'
+import { FilterBar } from '@/components/ui/FilterBar'
+import { PageHeader } from '@/components/ui/PageHeader'
+import { TwoLine } from '@/components/ui/TwoLine'
 
 const columns: ColumnsType<AdminUser> = [
   {
     title: 'User',
     dataIndex: 'name',
     key: 'name',
-    render: (_, u) => (
-      <div style={{ minWidth: 0 }}>
-        <div>{u.name}</div>
-        <div style={{ fontSize: 12, color: 'rgba(0, 0, 0, 0.45)', wordBreak: 'break-all' }}>
-          {u.email}
-        </div>
-      </div>
-    ),
+    render: (_, u) => <TwoLine primary={u.name} secondary={u.email} />,
   },
   {
     title: 'Role',
@@ -76,26 +74,12 @@ export default function AdminUsers() {
     }
   }, [])
 
-  const filtered = useMemo(() => {
-    const needle = q.trim().toLowerCase()
-    if (!needle) return users
-    return users.filter(
-      (u) => u.name.toLowerCase().includes(needle) || u.email.toLowerCase().includes(needle),
-    )
-  }, [users, q])
-
-  const adminCount = users.filter((u) => u.role === ADMIN_ROLE).length
-
   return (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
-      <div>
-        <Typography.Title level={4} style={{ margin: 0 }}>
-          Users
-        </Typography.Title>
-        <Typography.Text type="secondary">
-          {users.length} total · {adminCount} admin
-        </Typography.Text>
-      </div>
+      <PageHeader
+        title="Users"
+        subtitle={`${users.length} total · ${users.filter((u) => u.role === ADMIN_ROLE).length} admin`}
+      />
 
       <Alert
         type="info"
@@ -104,21 +88,13 @@ export default function AdminUsers() {
         description="Names and email addresses come from each person's Google account, and the admin role is granted in GCP IAM. Neither can be edited here."
       />
 
-      <Input.Search
-        allowClear
-        placeholder="Search name or email…"
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        style={{ maxWidth: 360 }}
-      />
+      <FilterBar search={q} onSearch={setQ} placeholder="Search name or email…" />
 
-      <Table
-        rowKey="id"
+      <DataTable<AdminUser>
         columns={columns}
-        dataSource={filtered}
+        dataSource={filterBySearch(users, q, (u) => [u.name, u.email])}
         loading={loading}
-        size="middle"
-        pagination={{ pageSize: 15, hideOnSinglePage: true, showSizeChanger: false }}
+        pageSize={15}
       />
     </Space>
   )

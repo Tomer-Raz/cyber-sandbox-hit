@@ -2,7 +2,6 @@ import type {
   AdminScan,
   AdminUser,
   AiInsight,
-  CategoryCount,
   DashboardStats,
   Finding,
   PhaseKey,
@@ -15,12 +14,11 @@ import type {
   SeverityCounts,
   TrendPoint,
 } from '@/types'
-import { SCAN_TYPE_META } from '@/lib/constants'
-import { clamp } from '@/lib/format'
+import { SCAN_TYPE_META, SEVERITY_ORDER, isRunning } from '@/lib/constants'
+import { clamp, groupByCategory } from '@/lib/format'
 import { intBetween, pick, sample, seededRng } from '@/lib/prng'
 import { VULN_CATALOG, type VulnTemplate } from './catalog'
 
-// ── Internal record (source of truth) ─────────────────────
 interface ScanRecord {
   id: string
   name: string
@@ -49,123 +47,38 @@ function nextId(): string {
   return `scn_${counter.toString(36).padStart(5, '0')}`
 }
 
-// ── Seed dataset ──────────────────────────────────────────
-const records: ScanRecord[] = [
-  {
-    id: 'scn_demo01',
-    name: 'Production storefront — full sweep',
-    target: 'https://shop.acme-demo.com',
-    scanType: 'full',
-    createdAt: NOW - 34 * SEC,
-    startedAt: NOW - 18 * SEC,
-    simDurationMs: 52 * SEC,
-    baseStatus: 'running',
-    region: 'europe-west1',
-    requestedBy: 'John Doe',
-    authorized: true,
-    exploitValidation: true,
-  },
-  {
-    id: 'scn_a1f04',
-    name: 'Customer API gateway',
-    target: 'https://api.acme-demo.com',
-    scanType: 'api',
-    createdAt: NOW - 3 * 60 * MIN,
-    startedAt: NOW - 3 * 60 * MIN + 20 * SEC,
-    simDurationMs: 11 * MIN,
-    baseStatus: 'completed',
-    region: 'europe-west1',
-    requestedBy: 'John Doe',
-    authorized: true,
-    exploitValidation: true,
-  },
-  {
-    id: 'scn_b7c21',
-    name: 'Marketing site baseline',
-    target: 'https://www.acme-demo.com',
-    scanType: 'baseline',
-    createdAt: NOW - 26 * 60 * MIN,
-    startedAt: NOW - 26 * 60 * MIN + 8 * SEC,
-    simDurationMs: 3 * MIN,
-    baseStatus: 'completed',
-    region: 'europe-west4',
-    requestedBy: 'A. Cohen',
-    authorized: true,
-    exploitValidation: false,
-  },
-  {
-    id: 'scn_c3d88',
-    name: 'Internal billing service',
-    target: 'https://billing.internal.acme-demo.com',
-    scanType: 'full',
-    createdAt: NOW - 27 * 60 * MIN,
-    startedAt: NOW - 27 * 60 * MIN + 15 * SEC,
-    simDurationMs: 24 * MIN,
-    baseStatus: 'completed',
-    region: 'europe-west1',
-    requestedBy: 'M. Levi',
-    authorized: true,
-    exploitValidation: true,
-  },
-  {
-    id: 'scn_d9e12',
-    name: 'Auth service — quick check',
-    target: 'https://auth.acme-demo.com',
-    scanType: 'quick',
-    createdAt: NOW - 50 * 60 * MIN,
-    startedAt: NOW - 50 * 60 * MIN + 10 * SEC,
-    simDurationMs: 8 * MIN,
-    baseStatus: 'completed',
-    region: 'us-central1',
-    requestedBy: 'John Doe',
-    authorized: true,
-    exploitValidation: false,
-  },
-  {
-    id: 'scn_e1a55',
-    name: 'Staging — regression scan',
-    target: 'https://staging.acme-demo.com',
-    scanType: 'quick',
-    createdAt: NOW - 2 * 24 * 60 * MIN,
-    startedAt: NOW - 2 * 24 * 60 * MIN + 12 * SEC,
-    simDurationMs: 7 * MIN,
-    baseStatus: 'failed',
-    region: 'europe-west4',
-    requestedBy: 'Security Bot',
-    authorized: true,
-    exploitValidation: false,
-  },
-  {
-    id: 'scn_f2b77',
-    name: 'Partner portal',
-    target: 'https://partners.acme-demo.com',
-    scanType: 'full',
-    createdAt: NOW - 3 * 24 * 60 * MIN,
-    startedAt: NOW - 3 * 24 * 60 * MIN + 18 * SEC,
-    simDurationMs: 22 * MIN,
-    baseStatus: 'completed',
-    region: 'europe-west1',
-    requestedBy: 'A. Cohen',
-    authorized: true,
-    exploitValidation: true,
-  },
-  {
-    id: 'scn_g4c19',
-    name: 'Docs portal baseline',
-    target: 'https://docs.acme-demo.com',
-    scanType: 'baseline',
-    createdAt: NOW - 5 * 24 * 60 * MIN,
-    startedAt: NOW - 5 * 24 * 60 * MIN + 6 * SEC,
-    simDurationMs: 3 * MIN,
-    baseStatus: 'completed',
-    region: 'us-central1',
-    requestedBy: 'M. Levi',
-    authorized: true,
-    exploitValidation: false,
-  },
+// [id, name, target, type, createdAgo, startDelay, duration, region, requestedBy, status?]
+type Seed = [string, string, string, Scan['scanType'], number, number, number, string, string, ScanRecord['baseStatus']?]
+
+// Exploit validation is what separates the deep scan types from the shallow ones.
+const SEEDS: Seed[] = [
+  ['scn_demo01', 'Production storefront — full sweep', 'https://shop.acme-demo.com', 'full', 34 * SEC, 16 * SEC, 52 * SEC, 'europe-west1', 'John Doe', 'running'],
+  ['scn_a1f04', 'Customer API gateway', 'https://api.acme-demo.com', 'api', 3 * 60 * MIN, 20 * SEC, 11 * MIN, 'europe-west1', 'John Doe'],
+  ['scn_b7c21', 'Marketing site baseline', 'https://www.acme-demo.com', 'baseline', 26 * 60 * MIN, 8 * SEC, 3 * MIN, 'europe-west4', 'A. Cohen'],
+  ['scn_c3d88', 'Internal billing service', 'https://billing.internal.acme-demo.com', 'full', 27 * 60 * MIN, 15 * SEC, 24 * MIN, 'europe-west1', 'M. Levi'],
+  ['scn_d9e12', 'Auth service — quick check', 'https://auth.acme-demo.com', 'quick', 50 * 60 * MIN, 10 * SEC, 8 * MIN, 'us-central1', 'John Doe'],
+  ['scn_e1a55', 'Staging — regression scan', 'https://staging.acme-demo.com', 'quick', 2 * 24 * 60 * MIN, 12 * SEC, 7 * MIN, 'europe-west4', 'Security Bot', 'failed'],
+  ['scn_f2b77', 'Partner portal', 'https://partners.acme-demo.com', 'full', 3 * 24 * 60 * MIN, 18 * SEC, 22 * MIN, 'europe-west1', 'A. Cohen'],
+  ['scn_g4c19', 'Docs portal baseline', 'https://docs.acme-demo.com', 'baseline', 5 * 24 * 60 * MIN, 6 * SEC, 3 * MIN, 'us-central1', 'M. Levi'],
 ]
 
-// ── Time-derived phase / progress ─────────────────────────
+const records: ScanRecord[] = SEEDS.map(
+  ([id, name, target, scanType, ago, delay, simDurationMs, region, requestedBy, baseStatus]) => ({
+    id,
+    name,
+    target,
+    scanType,
+    createdAt: NOW - ago,
+    startedAt: NOW - ago + delay,
+    simDurationMs,
+    baseStatus: baseStatus ?? 'completed',
+    region,
+    requestedBy,
+    authorized: true,
+    exploitValidation: scanType === 'full' || scanType === 'api',
+  }),
+)
+
 function phaseForFraction(frac: number): PhaseKey {
   if (frac >= 1) return 'completed'
   if (frac >= 0.94) return 'reporting'
@@ -180,28 +93,16 @@ function originOf(target: string): string {
   return `https://${target.replace(/\/+$/, '')}`
 }
 
-function allowedSeverities(type: Scan['scanType']): Severity[] {
-  switch (type) {
-    case 'baseline':
-      return ['medium', 'low', 'info']
-    case 'quick':
-      return ['high', 'medium', 'low', 'info']
-    default:
-      return ['critical', 'high', 'medium', 'low', 'info']
-  }
-}
-
-function findingCount(type: Scan['scanType'], rng: () => number): number {
-  switch (type) {
-    case 'baseline':
-      return intBetween(rng, 4, 7)
-    case 'quick':
-      return intBetween(rng, 6, 10)
-    case 'api':
-      return intBetween(rng, 8, 13)
-    default:
-      return intBetween(rng, 13, 19)
-  }
+// Per scan type: severities the policy can surface, finding-count range, and
+// how long the simulated run takes.
+const PROFILE: Record<
+  Scan['scanType'],
+  { severities: Severity[]; count: [number, number]; simMs: number }
+> = {
+  baseline: { severities: ['medium', 'low', 'info'], count: [4, 7], simMs: 34 * SEC },
+  quick: { severities: ['high', 'medium', 'low', 'info'], count: [6, 10], simMs: 40 * SEC },
+  api: { severities: SEVERITY_ORDER, count: [8, 13], simMs: 44 * SEC },
+  full: { severities: SEVERITY_ORDER, count: [13, 19], simMs: 48 * SEC },
 }
 
 function scoreFromCounts(c: SeverityCounts): number {
@@ -213,12 +114,12 @@ function emptyCounts(): SeverityCounts {
   return { critical: 0, high: 0, medium: 0, low: 0, info: 0 }
 }
 
-// ── Findings (deterministic per scan) ─────────────────────
 function buildFindings(rec: ScanRecord): Finding[] {
   const rng = seededRng(rec.id + '|findings')
-  const allowed = new Set(allowedSeverities(rec.scanType))
+  const { severities, count } = PROFILE[rec.scanType]
+  const allowed = new Set(severities)
   const pool: VulnTemplate[] = VULN_CATALOG.filter((t) => allowed.has(t.severity))
-  const n = Math.min(findingCount(rec.scanType, rng), pool.length)
+  const n = Math.min(intBetween(rng, ...count), pool.length)
   const chosen = sample(rng, pool, n)
   const origin = originOf(rec.target)
   const started = rec.startedAt ?? rec.createdAt
@@ -261,47 +162,40 @@ function countsFromFindings(findings: Finding[]): SeverityCounts {
   return c
 }
 
-// ── Live projection: record → Scan ────────────────────────
-export function projectScan(rec: ScanRecord): Scan {
-  let status: ScanStatus
-  let progress: number
-  let phase: PhaseKey
-  let completedAt: number | null = null
+/** Statuses that don't advance with the simulated clock. */
+const FROZEN: Partial<
+  Record<ScanRecord['baseStatus'], { status: ScanStatus; phase: PhaseKey; progress: number; frac: number }>
+> = {
+  queued: { status: 'queued', phase: 'queued', progress: 0, frac: 0 },
+  failed: { status: 'failed', phase: 'scanning', progress: 38, frac: 0.4 },
+  canceled: { status: 'canceled', phase: 'scanning', progress: 22, frac: 0.25 },
+}
 
-  if (rec.baseStatus === 'queued') {
-    status = 'queued'
-    progress = 0
-    phase = 'queued'
-  } else if (rec.baseStatus === 'failed') {
-    status = 'failed'
-    progress = 38
-    phase = 'scanning'
-    completedAt = (rec.startedAt ?? rec.createdAt) + rec.simDurationMs * 0.4
-  } else if (rec.baseStatus === 'canceled') {
-    status = 'canceled'
-    progress = 22
-    phase = 'scanning'
-    completedAt = (rec.startedAt ?? rec.createdAt) + rec.simDurationMs * 0.25
-  } else {
-    // running or completed — derive from the simulated clock
-    const started = rec.startedAt ?? rec.createdAt
-    const frac = clamp((Date.now() - started) / rec.simDurationMs, 0, 1)
-    phase = phaseForFraction(frac)
-    progress = Math.round(frac * 100)
-    if (frac >= 1) {
-      status = 'completed'
-      completedAt = started + rec.simDurationMs
-    } else {
-      status = phase as ScanStatus
-    }
-  }
+function currentFraction(rec: ScanRecord): number {
+  const frozen = FROZEN[rec.baseStatus]
+  if (frozen) return frozen.frac
+  if (rec.baseStatus === 'completed') return 1
+  const started = rec.startedAt ?? rec.createdAt
+  return clamp((Date.now() - started) / rec.simDurationMs, 0, 1)
+}
+
+function projectScan(rec: ScanRecord): Scan {
+  const frozen = FROZEN[rec.baseStatus]
+  const started = rec.startedAt ?? rec.createdAt
+  // Derived from the clock even when baseStatus is already 'completed', so a
+  // scan never reports done before its simulated window has elapsed.
+  const frac = frozen ? frozen.frac : clamp((Date.now() - started) / rec.simDurationMs, 0, 1)
+  const phase = frozen ? frozen.phase : phaseForFraction(frac)
+  const progress = frozen ? frozen.progress : Math.round(frac * 100)
+  const status: ScanStatus = frozen ? frozen.status : (phase as ScanStatus)
+  // A frozen scan stops where it died; a live one only has an end once it reaches 1.
+  const completedAt = frac > 0 && (frozen || frac >= 1) ? started + rec.simDurationMs * frac : null
 
   const isDone = status === 'completed'
   const findings = isDone ? buildFindings(rec) : []
   const counts = isDone ? countsFromFindings(findings) : emptyCounts()
-  const started = rec.startedAt
   const durationSec =
-    completedAt && started ? Math.round((completedAt - started) / 1000) : null
+    completedAt && rec.startedAt ? Math.round((completedAt - rec.startedAt) / 1000) : null
 
   return {
     id: rec.id,
@@ -312,7 +206,7 @@ export function projectScan(rec: ScanRecord): Scan {
     progress,
     phase,
     createdAt: new Date(rec.createdAt).toISOString(),
-    startedAt: started ? new Date(started).toISOString() : null,
+    startedAt: rec.startedAt ? new Date(rec.startedAt).toISOString() : null,
     completedAt: completedAt ? new Date(completedAt).toISOString() : null,
     durationSec,
     counts,
@@ -324,7 +218,6 @@ export function projectScan(rec: ScanRecord): Scan {
   }
 }
 
-// ── Event timeline ────────────────────────────────────────
 interface EventTpl {
   at: number
   phase: PhaseKey
@@ -395,16 +288,6 @@ function toEvent(
   }
 }
 
-function currentFraction(rec: ScanRecord): number {
-  if (rec.baseStatus === 'completed') return 1
-  if (rec.baseStatus === 'queued') return 0
-  if (rec.baseStatus === 'failed') return 0.4
-  if (rec.baseStatus === 'canceled') return 0.25
-  const started = rec.startedAt ?? rec.createdAt
-  return clamp((Date.now() - started) / rec.simDurationMs, 0, 1)
-}
-
-// ── AI insight (deterministic narrative) ──────────────────
 function buildInsight(scan: Scan, findings: Finding[]): AiInsight {
   const top = findings.slice(0, 3).map((f) => f.name)
   const crit = scan.counts.critical
@@ -428,33 +311,25 @@ function buildInsight(scan: Scan, findings: Finding[]): AiInsight {
   }
 }
 
-// ── Public report assembly ────────────────────────────────
-export function buildReport(rec: ScanRecord): ScanReport {
+function buildReport(rec: ScanRecord): ScanReport {
   const scan = projectScan(rec)
-  const findings = scan.status === 'completed' ? buildFindings(rec) : buildFindings(rec)
-  const byCat = new Map<string, number>()
-  for (const f of findings) byCat.set(f.category, (byCat.get(f.category) ?? 0) + 1)
-  const findingsByCategory: CategoryCount[] = [...byCat.entries()]
-    .map(([category, count]) => ({ category, count }))
-    .sort((a, b) => b.count - a.count)
-
+  const findings = buildFindings(rec)
   return {
     scan,
     findings,
     events: buildEvents(rec, currentFraction(rec)),
     ai: buildInsight(scan, findings),
-    findingsByCategory,
+    findingsByCategory: groupByCategory(findings),
   }
 }
 
-// ── Collection accessors ──────────────────────────────────
 export function listScans(): Scan[] {
   return records
     .map(projectScan)
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 }
 
-export function getScanRecord(id: string): ScanRecord | undefined {
+function getScanRecord(id: string): ScanRecord | undefined {
   return records.find((r) => r.id === id)
 }
 
@@ -475,21 +350,14 @@ export function getReport(id: string): ScanReport | undefined {
 }
 
 export function createScan(req: ScanRequest): Scan {
-  const meta = SCAN_TYPE_META[req.scanType]
-  const simByType: Record<string, number> = {
-    baseline: 34 * SEC,
-    quick: 40 * SEC,
-    api: 44 * SEC,
-    full: 48 * SEC,
-  }
   const rec: ScanRecord = {
     id: nextId(),
-    name: req.name || `${meta.label} scan · ${req.target}`,
+    name: req.name || `${SCAN_TYPE_META[req.scanType].label} scan · ${req.target}`,
     target: req.target,
     scanType: req.scanType,
     createdAt: Date.now(),
     startedAt: Date.now() + 400,
-    simDurationMs: simByType[req.scanType] ?? 42 * SEC,
+    simDurationMs: PROFILE[req.scanType].simMs,
     baseStatus: 'running',
     region: pick(seededRng(req.target + Date.now()), REGIONS),
     requestedBy: REQUESTERS[0],
@@ -508,65 +376,48 @@ export function cancelScan(id: string): Scan | undefined {
   return projectScan(rec)
 }
 
-// ── Dashboard aggregation ─────────────────────────────────
 export function dashboardStats(): DashboardStats {
   const scans = records.map(projectScan)
   const completed = scans.filter((s) => s.status === 'completed')
-  const running = scans.filter((s) =>
-    ['queued', 'provisioning', 'scanning', 'analyzing', 'validating', 'reporting'].includes(
-      s.status,
-    ),
-  )
 
-  const severityTotals: SeverityCounts = emptyCounts()
+  const severityTotals = emptyCounts()
   let totalFindings = 0
   for (const s of completed) {
-    severityTotals.critical += s.counts.critical
-    severityTotals.high += s.counts.high
-    severityTotals.medium += s.counts.medium
-    severityTotals.low += s.counts.low
-    severityTotals.info += s.counts.info
+    for (const key of SEVERITY_ORDER) severityTotals[key] += s.counts[key]
     totalFindings += s.totalFindings
   }
 
-  const avgRiskScore = completed.length
-    ? Math.round(completed.reduce((a, s) => a + s.riskScore, 0) / completed.length)
-    : 0
-
-  // 7-day trend built from completed scans, bucketed by day
+  // 7-day trend from completed scans, bucketed by day.
   const dayMs = 24 * 60 * MIN
-  const trend: TrendPoint[] = []
-  for (let d = 6; d >= 0; d--) {
-    const dayStart = NOW - d * dayMs
-    const label = new Date(dayStart).toLocaleDateString(undefined, { weekday: 'short' })
+  const trend: TrendPoint[] = Array.from({ length: 7 }, (_, i) => {
+    const dayStart = NOW - (6 - i) * dayMs
     const inDay = completed.filter((s) => {
       const t = new Date(s.completedAt ?? s.createdAt).getTime()
       return t >= dayStart - dayMs / 2 && t < dayStart + dayMs / 2
     })
-    trend.push({
-      label,
+    return {
+      label: new Date(dayStart).toLocaleDateString(undefined, { weekday: 'short' }),
       scans: inDay.length,
       findings: inDay.reduce((a, s) => a + s.totalFindings, 0),
       critical: inDay.reduce((a, s) => a + s.counts.critical, 0),
-    })
-  }
+    }
+  })
 
   return {
     totalScans: scans.length,
     completedScans: completed.length,
-    runningScans: running.length,
+    runningScans: scans.filter((s) => isRunning(s.status)).length,
     totalFindings,
     criticalFindings: severityTotals.critical,
-    avgRiskScore,
+    avgRiskScore: completed.length
+      ? Math.round(completed.reduce((a, s) => a + s.riskScore, 0) / completed.length)
+      : 0,
     trend,
     severityTotals,
   }
 }
 
-// ── Admin views ───────────────────────────────────────────
-// Mock mode has no user table, so the roster is derived from whoever
-// requested the seeded scans.
-
+// Mock mode has no user table, so the roster is derived from the seeded scans.
 function emailFor(name: string): string {
   return `${name.toLowerCase().replace(/[^a-z]+/g, '.')}@hit.ac.il`
 }

@@ -1,9 +1,13 @@
-import { useMemo, useState } from 'react'
-import { Col, Descriptions, Input, Row, Select, Space, Table, Tag, Typography } from 'antd'
+import { useState } from 'react'
+import { Descriptions, Space, Tag, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { SEVERITY_META, SEVERITY_ORDER } from '@/lib/constants'
 import { formatDateTime } from '@/lib/format'
+import { filterBySearch } from '@/lib/hooks'
 import type { Finding, Severity } from '@/types'
+import { DataTable } from '@/components/ui/DataTable'
+import { FilterBar } from '@/components/ui/FilterBar'
+import { TwoLine } from '@/components/ui/TwoLine'
 
 function FindingDetail({ f }: { f: Finding }) {
   return (
@@ -80,22 +84,13 @@ export function FindingsTable({ findings }: { findings: Finding[] }) {
   const [q, setQ] = useState('')
   const [sev, setSev] = useState<Severity | 'all'>('all')
 
-  const rows = useMemo(() => {
-    const needle = q.trim().toLowerCase()
-    return findings
-      .filter((f) => sev === 'all' || f.severity === sev)
-      .filter(
-        (f) =>
-          !needle ||
-          f.name.toLowerCase().includes(needle) ||
-          f.category.toLowerCase().includes(needle) ||
-          f.cveIds.some((c) => c.toLowerCase().includes(needle)),
-      )
-      .sort(
-        (a, b) =>
-          SEVERITY_META[b.severity].rank - SEVERITY_META[a.severity].rank || b.cvss - a.cvss,
-      )
-  }, [findings, sev, q])
+  const rows = filterBySearch(
+    findings.filter((f) => sev === 'all' || f.severity === sev),
+    q,
+    (f) => [f.name, f.category, ...f.cveIds],
+  ).sort(
+    (a, b) => SEVERITY_META[b.severity].rank - SEVERITY_META[a.severity].rank || b.cvss - a.cvss,
+  )
 
   const columns: ColumnsType<Finding> = [
     {
@@ -113,13 +108,11 @@ export function FindingsTable({ findings }: { findings: Finding[] }) {
       dataIndex: 'name',
       key: 'name',
       render: (_, f) => (
-        <div style={{ minWidth: 0 }}>
-          <div>{f.name}</div>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            {f.category}
-            {f.cveIds.length > 0 && ` · ${f.cveIds[0]}`}
-          </Typography.Text>
-        </div>
+        <TwoLine
+          breakAll={false}
+          primary={f.name}
+          secondary={`${f.category}${f.cveIds.length > 0 ? ` · ${f.cveIds[0]}` : ''}`}
+        />
       ),
     },
     {
@@ -149,34 +142,26 @@ export function FindingsTable({ findings }: { findings: Finding[] }) {
 
   return (
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-      <Row gutter={[12, 12]}>
-        <Col xs={24} sm={14} md={10}>
-          <Input.Search
-            allowClear
-            placeholder="Search findings, CVEs…"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
-        </Col>
-        <Col xs={24} sm={10} md={8}>
-          <Select
-            style={{ width: '100%' }}
-            value={sev}
-            onChange={setSev}
-            options={[
-              { value: 'all', label: 'All severities' },
+      <FilterBar
+        search={q}
+        onSearch={setQ}
+        placeholder="Search findings, CVEs…"
+        selects={[
+          {
+            value: sev,
+            onChange: setSev,
+            options: [
+              { value: 'all' as const, label: 'All severities' },
               ...SEVERITY_ORDER.map((s) => ({ value: s, label: SEVERITY_META[s].label })),
-            ]}
-          />
-        </Col>
-      </Row>
+            ],
+          },
+        ]}
+      />
 
-      <Table
-        rowKey="id"
+      <DataTable<Finding>
         columns={columns}
         dataSource={rows}
-        size="middle"
-        pagination={{ pageSize: 10, hideOnSinglePage: true, showSizeChanger: false }}
+        pageSize={10}
         expandable={{ expandedRowRender: (f) => <FindingDetail f={f} /> }}
       />
     </Space>

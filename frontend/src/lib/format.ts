@@ -1,7 +1,15 @@
-// Formatting helpers — dates, durations, numbers, risk banding.
+import type { CategoryCount, Finding, Severity } from '@/types'
 
 export function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n))
+}
+
+export function groupByCategory(findings: Finding[]): CategoryCount[] {
+  const totals = new Map<string, number>()
+  for (const f of findings) totals.set(f.category, (totals.get(f.category) ?? 0) + 1)
+  return [...totals.entries()]
+    .map(([category, count]) => ({ category, count }))
+    .sort((a, b) => b.count - a.count)
 }
 
 const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
@@ -50,20 +58,7 @@ export function formatDuration(seconds: number | null): string {
   return `${h}h ${m % 60}m`
 }
 
-export function formatNumber(n: number): string {
-  return new Intl.NumberFormat('en').format(n)
-}
-
-export function pluralize(n: number, word: string, plural?: string): string {
-  return n === 1 ? `${n} ${word}` : `${n} ${plural ?? word + 's'}`
-}
-
-export interface RiskBand {
-  label: string
-  tone: 'critical' | 'high' | 'medium' | 'low'
-}
-
-export function riskBand(score: number): RiskBand {
+export function riskBand(score: number): { label: string; tone: Severity } {
   if (score >= 80) return { label: 'Critical', tone: 'critical' }
   if (score >= 55) return { label: 'Elevated', tone: 'high' }
   if (score >= 30) return { label: 'Moderate', tone: 'medium' }

@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom'
 import { App as AntdApp, ConfigProvider, theme } from 'antd'
 import App from './App'
 import { AuthProvider } from './auth/AuthProvider'
+import { ACCENT_HEX } from './lib/constants'
 import { NotificationBridge } from './lib/notify'
 import './index.css'
 
@@ -13,7 +14,7 @@ ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
       theme={{
         algorithm: theme.defaultAlgorithm,
         token: {
-          colorPrimary: '#1677ff',
+          colorPrimary: ACCENT_HEX,
           borderRadius: 6,
         },
       }}

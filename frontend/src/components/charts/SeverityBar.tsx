@@ -1,4 +1,4 @@
-import { SEVERITY_META, SEVERITY_ORDER } from '@/lib/constants'
+import { SEVERITY_META, SEVERITY_ORDER, TEXT } from '@/lib/constants'
 import type { SeverityCounts } from '@/types'
 
 /** Flat stacked bar showing the severity distribution of a finding set. */
@@ -45,7 +45,7 @@ export function SeverityBar({
                 alignItems: 'center',
                 gap: 6,
                 fontSize: 12,
-                color: 'rgba(0, 0, 0, 0.65)',
+                color: TEXT,
               }}
             >
               <span
