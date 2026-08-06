@@ -8,6 +8,7 @@ from google.genai import types as genai_types
 from app.core.config import shared_settings
 from app.db.firestore import get_firestore_client
 from app.schemas.finding import AnalyzeFindingsResult, FindingAnalysis, ZapFinding
+from app.services.log_service import ProgressFn
 
 _AI_RESULTS_COLLECTION = "ai_results"
 
@@ -171,7 +172,9 @@ async def _store_result(
     )
 
 
-async def analyze_findings(scan_id: str, findings: list[ZapFinding]) -> AnalyzeFindingsResult:
+async def analyze_findings(
+    scan_id: str, findings: list[ZapFinding], on_progress: ProgressFn | None = None
+) -> AnalyzeFindingsResult:
     """Sends ZAP findings to Vertex AI and returns CVE list/severity/CVSS per finding.
 
     Findings whose (plugin, name, risk, cwe) signature was analyzed before are
@@ -184,11 +187,20 @@ async def analyze_findings(scan_id: str, findings: list[ZapFinding]) -> AnalyzeF
     signatures = [_finding_signature(f) for f in findings]
 
     results: list[FindingAnalysis | None] = []
-    for sig in signatures:
-        results.append(await _get_cached(client, sig))
+    for i, sig in enumerate(signatures):
+        cached = await _get_cached(client, sig)
+        results.append(cached)
+        if on_progress:
+            hit = "cache hit" if cached else "needs analysis"
+            await on_progress(f"[{i + 1}/{len(findings)}] {findings[i].name} — {hit}")
 
     uncached_indices = [i for i, r in enumerate(results) if r is None]
     if uncached_indices:
+        if on_progress:
+            await on_progress(
+                f"Sending {len(uncached_indices)} findings to Vertex AI "
+                f"({shared_settings.vertex_model})"
+            )
         try:
             raw = await _call_vertex_ai([findings[i] for i in uncached_indices])
             items = raw["findings"]
@@ -196,6 +208,9 @@ async def analyze_findings(scan_id: str, findings: list[ZapFinding]) -> AnalyzeF
             raise
         except Exception as exc:
             raise AIServiceError(f"Vertex AI request failed: {exc}") from exc
+
+        if on_progress:
+            await on_progress(f"Vertex AI returned {len(items)} analyses")
 
         for item in items:
             original_index = uncached_indices[item["index"]]
@@ -213,7 +228,13 @@ async def analyze_findings(scan_id: str, findings: list[ZapFinding]) -> AnalyzeF
             raise AIServiceError(f"Vertex AI response missing entry for finding {i}")
 
     finalized: list[FindingAnalysis] = results  # type: ignore[assignment]  # all slots filled above
-    for sig, finding, analysis in zip(signatures, findings, finalized):
+    for i, (sig, finding, analysis) in enumerate(zip(signatures, findings, finalized)):
         await _store_result(client, scan_id, sig, finding, analysis)
+        if on_progress:
+            cves = ", ".join(analysis.cve_ids) or "no CVE match"
+            await on_progress(
+                f"[{i + 1}/{len(findings)}] {finding.name} — {analysis.severity} "
+                f"(CVSS {analysis.cvss_score}, {cves})"
+            )
 
     return AnalyzeFindingsResult(scan_id=scan_id, findings=finalized)

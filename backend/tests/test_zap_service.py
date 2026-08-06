@@ -56,6 +56,36 @@ async def test_run_spider_polls_until_status_100(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_run_spider_reports_each_progress_change(monkeypatch):
+    statuses = iter(["0", "0", "40", "100"])
+    zap = _fake_zap(
+        spider=SimpleNamespace(
+            scan=lambda url: "spider-1",
+            status=lambda scan_id: next(statuses),
+            results=lambda scan_id: ["http://target.example/", "http://target.example/login"],
+        )
+    )
+    monkeypatch.setattr(zap_service, "_get_zap", lambda: zap)
+
+    lines = []
+
+    async def on_progress(line):
+        lines.append(line)
+
+    await zap_service.run_spider("http://target.example", on_progress)
+
+    # The repeated "0" is polled twice but reported once — a step that sits at
+    # one percentage shouldn't flood the log with a line per poll.
+    assert lines == [
+        "Fetched http://target.example as the crawl seed",
+        "Crawling 0%",
+        "Crawling 40%",
+        "Crawling 100%",
+        "Crawl discovered 2 URLs",
+    ]
+
+
+@pytest.mark.asyncio
 async def test_run_spider_wraps_start_failure(monkeypatch):
     def raise_error(url):
         raise RuntimeError("ZAP unreachable")

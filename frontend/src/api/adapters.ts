@@ -38,6 +38,7 @@ export interface ApiScan {
 export interface ApiScanEvent {
   timestamp: string
   action: string
+  message: string
   level: string
 }
 
@@ -199,7 +200,7 @@ export function toScanEvent(dto: ApiScanEvent, index: number): ScanEvent {
     ts: dto.timestamp,
     phase: 'scanning',
     level: oneOf(EVENT_LEVELS, dto.level, 'info'),
-    message: dto.action.replace(/_/g, ' '),
+    message: dto.message || dto.action.replace(/_/g, ' '),
   }
 }
 

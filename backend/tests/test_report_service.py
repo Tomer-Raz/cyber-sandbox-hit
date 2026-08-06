@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -7,7 +7,7 @@ from app.models.scan import Scan
 from app.models.scan_config import ScanConfig
 from app.models.target import Target
 from app.schemas.report import ReportFinding, ScanReport
-from app.services import report_service
+from app.services import log_service, report_service
 from tests.conftest import FakeFirestoreClient, FakeResult, FakeSession
 
 
@@ -93,6 +93,41 @@ async def test_build_scan_report_combines_db_and_firestore(monkeypatch):
     assert report.target_url == "https://target.example"
     assert report.scan_type == "full"
     assert len(report.findings) == 1
+
+
+@pytest.mark.asyncio
+async def test_scan_events_interleaves_worker_log_with_audit_trail(monkeypatch):
+    t0 = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+    audit_docs = [{"timestamp": t0, "action": "scan_started"}]
+    # Deliberately out of order — scan_events sorts rather than relying on the
+    # query, since neither collection is read with an order_by.
+    worker_docs = [
+        {
+            "timestamp": t0 + timedelta(seconds=2),
+            "event_type": "spider_progress",
+            "message": "Crawling 40%",
+            "level": "info",
+        },
+        {
+            "timestamp": t0 + timedelta(seconds=1),
+            "event_type": "zap_ready",
+            "message": "ZAP daemon is up",
+            "level": "success",
+        },
+    ]
+    monkeypatch.setattr(
+        report_service, "get_firestore_client", lambda: FakeFirestoreClient(docs=audit_docs)
+    )
+
+    async def fake_get_scan_logs(scan_id):
+        return worker_docs
+
+    monkeypatch.setattr(log_service, "get_scan_logs", fake_get_scan_logs)
+
+    events = await report_service.scan_events(Scan(id=uuid.uuid4(), config_id=uuid.uuid4()))
+
+    assert [e.message for e in events] == ["scan started", "ZAP daemon is up", "Crawling 40%"]
+    assert [e.level for e in events] == ["info", "success", "info"]
 
 
 def test_render_pdf_produces_valid_pdf_bytes():
