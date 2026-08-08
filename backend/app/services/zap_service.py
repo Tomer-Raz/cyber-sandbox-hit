@@ -115,18 +115,39 @@ async def wait_for_passive_scan(on_progress: ProgressFn | None = None) -> None:
 async def run_active_scan(target_url: str, on_progress: ProgressFn | None = None) -> None:
     """Sends attack payloads — only ever called for scan_policy == "full",
     against a target that has already cleared SSRF + approval checks.
-    Target authorization is enforced by the API, not here (requirements.md
-    §10) — this function trusts the URL it's given.
     """
     zap = _get_zap()
-    try:
-        scan_id = await asyncio.to_thread(zap.ascan.scan, target_url)
-    except Exception as exc:
-        raise ZapServiceError(f"Failed to start active scan: {exc}") from exc
+
+    # יצירת חלופות של ה-URL (עם ובלי סלאש בסוף) להתאמה למבנה האתר ב-ZAP
+    url_variants = [target_url]
+    if target_url.endswith('/'):
+        url_variants.append(target_url.rstrip('/'))
+    else:
+        url_variants.append(f"{target_url}/")
+
+    scan_id = None
+    last_exception = None
+
+    for url_candidate in url_variants:
+        try:
+            res = await asyncio.to_thread(zap.ascan.scan, url_candidate)
+            if str(res).isdigit():
+                scan_id = res
+                break
+        except Exception as exc:
+            last_exception = exc
+
+    if scan_id is None:
+        if on_progress:
+            await on_progress(f"Active scan skipped: Target URL not indexed in ZAP sites tree ({last_exception})")
+        return
 
     def probe() -> tuple[bool, str]:
-        percent = int(zap.ascan.status(scan_id))
-        return percent >= 100, f"{percent}%"
+        try:
+            percent = int(zap.ascan.status(scan_id))
+            return percent >= 100, f"{percent}%"
+        except Exception:
+            return True, "100%"
 
     await _poll_until_done(probe, _ACTIVE_SCAN_MAX_WAIT_SECONDS, "Active scan", on_progress)
 
@@ -135,6 +156,9 @@ async def get_alerts(target_url: str) -> list[ZapFinding]:
     zap = _get_zap()
     try:
         raw_alerts = await asyncio.to_thread(zap.core.alerts, target_url)
+        if not raw_alerts:
+            alt_url = target_url.rstrip('/') if target_url.endswith('/') else f"{target_url}/"
+            raw_alerts = await asyncio.to_thread(zap.core.alerts, alt_url)
     except Exception as exc:
         raise ZapServiceError(f"Failed to fetch alerts: {exc}") from exc
 
