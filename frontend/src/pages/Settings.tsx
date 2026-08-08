@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CopyOutlined, LogoutOutlined, ReloadOutlined } from '@ant-design/icons'
+import { CopyOutlined, KeyOutlined, LogoutOutlined, ReloadOutlined } from '@ant-design/icons'
 import {
+  Alert,
   Avatar,
   Button,
   Card,
@@ -126,12 +127,22 @@ export default function Settings() {
         <Typography.Paragraph type="secondary">
           Use this key to trigger scans from CI pipelines or scripts against the FastAPI backend.
         </Typography.Paragraph>
+
+        <Alert
+          message="Security Note"
+          description="Your API key is hashed on the backend. Store it securely in your secrets manager.
+          If lost, rotate it to generate a new key."
+          type="info"
+          showIcon
+          icon={<KeyOutlined />}
+          style={{ marginBottom: 16 }}
+        />
+
         <Input.Password readOnly value={apiKey} className="mono" />
         <Space wrap style={{ marginTop: 12 }}>
           <Button icon={<CopyOutlined />} onClick={copyKey}>
             Copy
-          </Button>
-          <Button icon={<ReloadOutlined />} onClick={regenerate}>
+          </Button>          <Button icon={<ReloadOutlined />} onClick={regenerate}>
             Rotate
           </Button>
         </Space>
