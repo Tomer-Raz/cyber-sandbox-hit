@@ -65,7 +65,7 @@ jobs:
       # SCAN_POLICY are per-execution overrides set by scanner_job_service.py
       # at run time, not part of the deployed template.
       - name: Deploy to Cloud Run Jobs
-        uses: google-github-actions/deploy-cloudrun@v2
+        uses: google-github-actions/deploy-cloudrun@v3
         with:
           job: ${{ env.JOB }}
           region: ${{ env.REGION }}
