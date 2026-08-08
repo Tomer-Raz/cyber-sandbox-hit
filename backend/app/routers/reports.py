@@ -9,6 +9,8 @@ from app.models.user import User
 from app.schemas.report import ScanReport
 from app.services import report_service
 
+from app.core.crypto import ReportSigner
+
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 
 
@@ -34,17 +36,33 @@ async def export_report(
         )
 
     report = await report_service.build_scan_report(scan_id, user, db)
+    signer = ReportSigner()
 
     if format == "pdf":
         pdf_bytes = report_service.render_pdf(report)
+        signature = signer.sign_report(pdf_bytes)
+        pub_key = signer.export_public_key_pem().replace("\n", "\\n")
+
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
-            headers={"Content-Disposition": f'attachment; filename="scan-{scan_id}.pdf"'},
+            headers={
+                "Content-Disposition": f'attachment; filename="scan-{scan_id}.pdf"',
+                "X-Report-Signature": signature,
+                "X-Report-Public-Key": pub_key,
+            },
         )
 
+    json_str = report.model_dump_json(indent=2)
+    signature = signer.sign_report(json_str.encode("utf-8"))
+    pub_key = signer.export_public_key_pem().replace("\n", "\\n")
+
     return Response(
-        content=report.model_dump_json(indent=2),
+        content=json_str,
         media_type="application/json",
-        headers={"Content-Disposition": f'attachment; filename="scan-{scan_id}.json"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="scan-{scan_id}.json"',
+            "X-Report-Signature": signature,
+            "X-Report-Public-Key": pub_key,
+        },
     )

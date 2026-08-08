@@ -37,8 +37,6 @@ class Settings(SharedSettings):
     db_user: str
     db_password: str
 
-    jwt_signing_key: str
-
     artifact_registry_repo: str = "sandbox-images"
     scanner_job_name: str = "sandbox-dev-scanner"
 

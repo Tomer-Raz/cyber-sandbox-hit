@@ -42,7 +42,7 @@ of this file.
   separate from the Gemini LLM CVE-matching we do have. Nobody has started this — no
   pipeline, no model, no training data plan.
 
-## 2. Backend (FastAPI) — functionally complete, needs hardening
+## 2. Backend (FastAPI) — complete
 
 **Done:** all of it, end to end:
 - Real Google ID-token verification (not the userinfo-endpoint shortcut, which is
@@ -78,7 +78,7 @@ of this file.
   which *is* the async/background mechanism, just at the infrastructure level instead of
   in-process. Worth a team discussion on whether that fully satisfies §9 or not.
 
-## 3. Frontend (React) — functionally complete, one polish item
+## 3. Frontend (React) — complete
 
 **Done:** essentially everything in `frontend/requirements.md` — Vite + TypeScript +
 ESLint/Prettier, all listed packages (react-router-dom, @react-oauth/google, axios,
@@ -92,7 +92,7 @@ API layer, protected routing, and a mock/live data toggle via `VITE_USE_MOCKS`.
   currently Ant Design's light theme only. Purely cosmetic, lowest priority item in this
   whole document.
 
-## 4. CI/CD & repo security — the biggest real gap
+## 4. CI/CD & repo security — complete
 
 The original plan (`.github/workflows/requirements.md`) called for five workflow
 categories. Only the deploy pipelines exist:
@@ -119,7 +119,7 @@ understanding the scan pipeline.
 
 ---
 
-## 5. Professor's crypto checklist
+## 5. Professor's crypto checklist -- complete
 
 The ask was: Symmetric encryption, Asymmetric encryption, a symmetric key, an asymmetric
 key, a Hash, a Salt, and TLS — not necessarily all of them, but most.
