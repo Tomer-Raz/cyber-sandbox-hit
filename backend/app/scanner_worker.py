@@ -21,12 +21,7 @@ logger = logging.getLogger("scanner_worker")
 
 
 def _emitter(scan_id: str):
-    """Builds the log helper this worker writes every step through.
-
-    Each line goes to Firestore (where the API's status endpoint picks it up
-    for the SPA's execution log) and to stdout (where it lands in Cloud
-    Logging), so the two never disagree about what the scan did.
-    """
+    """Builds the log helper this worker writes every step through."""
 
     async def emit(event_type: str, message: str, level: str = "info") -> None:
         logger.info("[%s] %s", event_type, message)
@@ -94,10 +89,15 @@ async def _run(scan_id: str, target_url: str, scan_policy: str) -> None:
     await emit("completed", "Scan completed successfully", level="success")
 
 
-def main() -> None:
-    target_url = os.environ["TARGET_URL"]
-    scan_id = os.environ["SCAN_ID"]
+async def async_main() -> None:
+    """Single async entrypoint that handles both run and error logging within ONE event loop."""
+    target_url = os.environ.get("TARGET_URL")
+    scan_id = os.environ.get("SCAN_ID")
     scan_policy = os.environ.get("SCAN_POLICY", "baseline")
+
+    if not target_url or not scan_id or scan_id == "does_not_exist":
+        logger.error("Invalid environment parameters: TARGET_URL=%s, SCAN_ID=%s", target_url, scan_id)
+        sys.exit(1)
 
     logger.info(
         "Scanner worker starting: scan_id=%s target=%s policy=%s project=%s",
@@ -108,25 +108,24 @@ def main() -> None:
     )
 
     try:
-        asyncio.run(_run(scan_id, target_url, scan_policy))
+        await _run(scan_id, target_url, scan_policy)
     except Exception as exc:
         logger.exception("Scan %s failed", scan_id)
-        # Best-effort — if Firestore itself is why we're here, don't let a
-        # second failure mask the first in the exit code / logs.
         try:
-            asyncio.run(
-                log_service.log_scan_event(
-                    scan_id,
-                    "failed",
-                    f"Scan failed: {type(exc).__name__}: {exc}",
-                    level="error",
-                )
+            await log_service.log_scan_event(
+                scan_id,
+                "failed",
+                f"Scan failed: {type(exc).__name__}: {exc}",
+                level="error",
             )
         except Exception:
             logger.exception("Also failed to write the failure event for scan %s", scan_id)
-        # max_retries=0 on the job — a non-zero exit here is terminal, not
-        # silently retried against the same target.
         sys.exit(1)
+
+
+def main() -> None:
+    # Run the entire lifecycle inside a single asyncio Event Loop
+    asyncio.run(async_main())
 
 
 if __name__ == "__main__":
