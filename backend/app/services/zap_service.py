@@ -1,5 +1,6 @@
 import asyncio
 from collections.abc import Callable
+from urllib.parse import urlsplit
 
 from zapv2 import ZAPv2
 
@@ -28,6 +29,56 @@ def _get_zap() -> ZAPv2:
     if _zap is None:
         _zap = ZAPv2(apikey=None, proxies={"http": _ZAP_BASE_URL, "https": _ZAP_BASE_URL})
     return _zap
+
+
+def _origin(url: str) -> str:
+    """Normalizes a URL to the `scheme://host[:port]` form ZAP keys its sites
+    tree by, dropping the port when it's the scheme's default (as ZAP does).
+    """
+    parts = urlsplit(url)
+    default_port = {"http": 80, "https": 443}.get(parts.scheme)
+    host = parts.hostname or ""
+    netloc = host if parts.port in (None, default_port) else f"{host}:{parts.port}"
+    return f"{parts.scheme}://{netloc}"
+
+
+def _check_scan_id(value: object, step_name: str) -> None:
+    """ZAP's action endpoints answer HTTP 200 with an error code in the body
+    (`url_not_found`, `internal_error`, ...) instead of failing the request, and
+    the client returns that code as an ordinary string. Only a numeric scan id
+    means the scan actually started, so anything else has to be raised here or
+    it silently becomes "no findings".
+    """
+    if not str(value).isdigit():
+        raise ZapServiceError(f"ZAP refused to start the {step_name}: {value}")
+
+
+async def _indexed_site(target_url: str) -> str | None:
+    """The target's entry in ZAP's sites tree, or None if ZAP never got a
+    response from it. ZAP only indexes hosts that actually answered, so this
+    doubles as the reachability check.
+    """
+    zap = _get_zap()
+    try:
+        sites = await asyncio.to_thread(lambda: zap.core.sites)
+    except Exception as exc:
+        raise ZapServiceError(f"Failed to read ZAP's sites tree: {exc}") from exc
+    if not isinstance(sites, list):
+        raise ZapServiceError(f"Failed to read ZAP's sites tree: {sites}")
+    wanted = _origin(target_url)
+    return next((site for site in sites if _origin(site) == wanted), None)
+
+
+async def _indexed_urls(site: str) -> list[str]:
+    """Every URL ZAP has indexed under `site`, which must be a value ZAP itself
+    reported so the lookup is guaranteed to resolve.
+    """
+    zap = _get_zap()
+    try:
+        urls = await asyncio.to_thread(zap.core.urls, site)
+    except Exception as exc:
+        raise ZapServiceError(f"Failed to list indexed URLs for {site}: {exc}") from exc
+    return urls if isinstance(urls, list) else []
 
 
 async def _poll_until_done(
@@ -82,11 +133,29 @@ async def run_spider(target_url: str, on_progress: ProgressFn | None = None) -> 
     zap = _get_zap()
     try:
         await asyncio.to_thread(zap.core.access_url, target_url)
-        if on_progress:
-            await on_progress(f"Fetched {target_url} as the crawl seed")
+    except Exception as exc:
+        raise ZapServiceError(f"Failed to fetch {target_url}: {exc}") from exc
+
+    # A target that never answered leaves ZAP with an empty sites tree, and
+    # every later step then succeeds against nothing: the spider still reports
+    # its robots.txt/sitemap.xml probes, the passive queue still drains, and the
+    # scan lands on "completed, 0 findings". Fail loudly instead — a false
+    # "clean" result is the worst thing this scanner can report.
+    if await _indexed_site(target_url) is None:
+        raise ZapServiceError(
+            f"{target_url} returned no response to ZAP, so nothing was scanned. "
+            "Check that the host is up and reachable from the scanner "
+            "(DNS, egress firewall, and that the scheme and port are correct)."
+        )
+
+    if on_progress:
+        await on_progress(f"Fetched {target_url} as the crawl seed")
+
+    try:
         scan_id = await asyncio.to_thread(zap.spider.scan, target_url)
     except Exception as exc:
         raise ZapServiceError(f"Failed to start spider: {exc}") from exc
+    _check_scan_id(scan_id, "spider")
 
     def probe() -> tuple[bool, str]:
         percent = int(zap.spider.status(scan_id))
@@ -118,49 +187,46 @@ async def run_active_scan(target_url: str, on_progress: ProgressFn | None = None
     """
     zap = _get_zap()
 
-    # יצירת חלופות של ה-URL (עם ובלי סלאש בסוף) להתאמה למבנה האתר ב-ZAP
-    url_variants = [target_url]
-    if target_url.endswith('/'):
-        url_variants.append(target_url.rstrip('/'))
-    else:
-        url_variants.append(f"{target_url}/")
+    # ZAP can only attack nodes that are already in its sites tree, and it keys
+    # them by the URL it actually saw — which needn't be the one we asked for
+    # (trailing slash, or a redirect to another host or scheme). Start from a
+    # URL ZAP itself reported rather than guessing at spellings of ours.
+    site = await _indexed_site(target_url)
+    if site is None:
+        raise ZapServiceError(
+            f"{target_url} is not in ZAP's sites tree, so there is nothing to "
+            "attack — the crawl never reached this target."
+        )
+    indexed = await _indexed_urls(site)
+    start_url = next((url for url in indexed if urlsplit(url).path in ("", "/")), site)
 
-    scan_id = None
-    last_exception = None
-
-    for url_candidate in url_variants:
-        try:
-            res = await asyncio.to_thread(zap.ascan.scan, url_candidate)
-            if str(res).isdigit():
-                scan_id = res
-                break
-        except Exception as exc:
-            last_exception = exc
-
-    if scan_id is None:
-        if on_progress:
-            await on_progress(f"Active scan skipped: Target URL not indexed in ZAP sites tree ({last_exception})")
-        return
+    try:
+        scan_id = await asyncio.to_thread(zap.ascan.scan, start_url)
+    except Exception as exc:
+        raise ZapServiceError(f"Failed to start active scan on {start_url}: {exc}") from exc
+    _check_scan_id(scan_id, "active scan")
 
     def probe() -> tuple[bool, str]:
-        try:
-            percent = int(zap.ascan.status(scan_id))
-            return percent >= 100, f"{percent}%"
-        except Exception:
-            return True, "100%"
+        status = zap.ascan.status(scan_id)
+        if not str(status).isdigit():
+            raise ZapServiceError(f"ZAP lost track of active scan {scan_id}: {status}")
+        percent = int(status)
+        return percent >= 100, f"{percent}%"
 
     await _poll_until_done(probe, _ACTIVE_SCAN_MAX_WAIT_SECONDS, "Active scan", on_progress)
 
 
 async def get_alerts(target_url: str) -> list[ZapFinding]:
     zap = _get_zap()
+    # Filter by origin, not by the seed URL: ZAP matches `baseurl` as a prefix,
+    # and alerts are raised against the pages the crawl found rather than the
+    # URL we passed in.
     try:
-        raw_alerts = await asyncio.to_thread(zap.core.alerts, target_url)
-        if not raw_alerts:
-            alt_url = target_url.rstrip('/') if target_url.endswith('/') else f"{target_url}/"
-            raw_alerts = await asyncio.to_thread(zap.core.alerts, alt_url)
+        raw_alerts = await asyncio.to_thread(zap.core.alerts, _origin(target_url))
     except Exception as exc:
         raise ZapServiceError(f"Failed to fetch alerts: {exc}") from exc
+    if not isinstance(raw_alerts, list):
+        raise ZapServiceError(f"Failed to fetch alerts: {raw_alerts}")
 
     findings = []
     for alert in raw_alerts:

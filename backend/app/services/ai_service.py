@@ -12,6 +12,11 @@ from app.services.log_service import ProgressFn
 
 _AI_RESULTS_COLLECTION = "ai_results"
 
+# How many distinct findings go into one model request. The response carries a
+# summary plus remediation per finding, so an unbounded batch runs past the
+# model's output allowance and comes back as truncated, unparseable JSON.
+_MAX_FINDINGS_PER_REQUEST = 20
+
 # google-genai's response_schema is an OpenAPI 3.0 subset — uppercase TYPE enum,
 # not JSON Schema's lowercase.
 _RESPONSE_SCHEMA = {
@@ -114,7 +119,63 @@ async def _call_vertex_ai(findings: list[ZapFinding]) -> dict:
             temperature=0.2,
         ),
     )
+    candidate = response.candidates[0] if response.candidates else None
+    finish_reason = candidate.finish_reason if candidate else None
+    if finish_reason is not None and finish_reason != genai_types.FinishReason.STOP:
+        # Without this the caller only sees whatever JSONDecodeError the partial
+        # response happens to produce, which says nothing about the real cause.
+        raise AIServiceError(
+            f"Vertex AI stopped early ({finish_reason.name}) and returned an "
+            "incomplete response"
+        )
+    if not response.text:
+        raise AIServiceError("Vertex AI returned an empty response")
     return json.loads(response.text)
+
+
+async def _analyze_by_signature(
+    representatives: list[tuple[str, ZapFinding]],
+    on_progress: ProgressFn | None = None,
+) -> dict[str, FindingAnalysis]:
+    """Analyzes one representative finding per signature, in bounded batches."""
+    analyses: dict[str, FindingAnalysis] = {}
+    total_batches = -(-len(representatives) // _MAX_FINDINGS_PER_REQUEST)
+
+    for batch_number, start in enumerate(
+        range(0, len(representatives), _MAX_FINDINGS_PER_REQUEST), start=1
+    ):
+        batch = representatives[start : start + _MAX_FINDINGS_PER_REQUEST]
+        if on_progress:
+            await on_progress(
+                f"Analyzing batch {batch_number}/{total_batches} "
+                f"({len(batch)} findings) with {shared_settings.vertex_model}"
+            )
+        try:
+            raw = await _call_vertex_ai([finding for _, finding in batch])
+            items = raw["findings"]
+        except AIServiceError:
+            raise
+        except Exception as exc:
+            raise AIServiceError(f"Vertex AI request failed: {exc}") from exc
+
+        for item in items:
+            index = item["index"]
+            if not isinstance(index, int) or not 0 <= index < len(batch):
+                raise AIServiceError(
+                    f"Vertex AI returned index {index}, which is not one of the "
+                    f"{len(batch)} findings it was sent"
+                )
+            signature, _ = batch[index]
+            analyses[signature] = FindingAnalysis(
+                cve_ids=item.get("cve_ids", []),
+                severity=item["severity"],
+                cvss_score=item["cvss_score"],
+                summary=item["summary"],
+                remediation=item["remediation"],
+                cached=False,
+            )
+
+    return analyses
 
 
 async def _get_cached(client: firestore.AsyncClient, signature: str) -> FindingAnalysis | None:
@@ -196,32 +257,24 @@ async def analyze_findings(
 
     uncached_indices = [i for i, r in enumerate(results) if r is None]
     if uncached_indices:
+        # Analyze each distinct signature once and fan the answer back out. A scan
+        # of any real site repeats the same generic alert (missing header, cookie
+        # flag) on every page, and sending the duplicates would push the response
+        # past the model's output limit for no extra information.
+        representatives: dict[str, ZapFinding] = {}
+        for i in uncached_indices:
+            representatives.setdefault(signatures[i], findings[i])
+
         if on_progress:
             await on_progress(
-                f"Sending {len(uncached_indices)} findings to Vertex AI "
+                f"Sending {len(representatives)} distinct findings "
+                f"({len(uncached_indices)} total) to Vertex AI "
                 f"({shared_settings.vertex_model})"
             )
-        try:
-            raw = await _call_vertex_ai([findings[i] for i in uncached_indices])
-            items = raw["findings"]
-        except AIServiceError:
-            raise
-        except Exception as exc:
-            raise AIServiceError(f"Vertex AI request failed: {exc}") from exc
 
-        if on_progress:
-            await on_progress(f"Vertex AI returned {len(items)} analyses")
-
-        for item in items:
-            original_index = uncached_indices[item["index"]]
-            results[original_index] = FindingAnalysis(
-                cve_ids=item.get("cve_ids", []),
-                severity=item["severity"],
-                cvss_score=item["cvss_score"],
-                summary=item["summary"],
-                remediation=item["remediation"],
-                cached=False,
-            )
+        analyses = await _analyze_by_signature(list(representatives.items()), on_progress)
+        for i in uncached_indices:
+            results[i] = analyses.get(signatures[i])
 
     for i, analysis in enumerate(results):
         if analysis is None:
