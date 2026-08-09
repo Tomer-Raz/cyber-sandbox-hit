@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { GoogleOutlined } from '@ant-design/icons'
 import { GoogleLogin } from '@react-oauth/google'
-import { Button, Card, Flex, Space, Typography } from 'antd'
+import { Button, Card, Flex, Space, Spin, Typography } from 'antd'
 import { useAuth } from '@/auth/AuthContext'
 import { toast } from '@/lib/notify'
 import { Brand } from '@/components/Brand'
@@ -75,17 +75,39 @@ export default function Login() {
 
           {mode === 'google' ? (
             <Flex justify="center">
-              <GoogleLogin
-                onSuccess={(res) => handleGoogleCredential(res.credential)}
-                onError={() =>
-                  toast.error('Sign-in failed', 'Google rejected the sign-in attempt.')
-                }
-                useOneTap
-                shape="rectangular"
-                size="large"
-                text="continue_with"
-                width="320"
-              />
+              {/* Google renders its button in an iframe we cannot put a spinner
+                  inside, so the loader covers it while /auth/me is in flight. */}
+              <div style={{ position: 'relative', minHeight: 40, width: 320 }}>
+                <div
+                  style={{
+                    visibility: busy ? 'hidden' : 'visible',
+                    pointerEvents: busy ? 'none' : 'auto',
+                  }}
+                >
+                  <GoogleLogin
+                    onSuccess={(res) => handleGoogleCredential(res.credential)}
+                    onError={() =>
+                      toast.error('Sign-in failed', 'Google rejected the sign-in attempt.')
+                    }
+                    useOneTap
+                    shape="rectangular"
+                    size="large"
+                    text="continue_with"
+                    width="320"
+                  />
+                </div>
+                {busy && (
+                  <Flex
+                    align="center"
+                    justify="center"
+                    gap={10}
+                    style={{ position: 'absolute', inset: 0 }}
+                  >
+                    <Spin size="small" />
+                    <Typography.Text type="secondary">Verifying your account…</Typography.Text>
+                  </Flex>
+                )}
+              </div>
             </Flex>
           ) : (
             <Button
@@ -104,9 +126,11 @@ export default function Login() {
             type="secondary"
             style={{ fontSize: 12, display: 'block', textAlign: 'center' }}
           >
-            {mode === 'google'
-              ? 'Academic project for HIT — authorized security testing only.'
-              : 'Academic demo for HIT — signs you in as a sample analyst with simulated scan data.'}
+            {busy
+              ? 'Checking your access — this can take up to 10 seconds. No need to click again.'
+              : mode === 'google'
+                ? 'Academic project for HIT — authorized security testing only.'
+                : 'Academic demo for HIT — signs you in as a sample analyst with simulated scan data.'}
           </Typography.Text>
         </Space>
       </Card>
