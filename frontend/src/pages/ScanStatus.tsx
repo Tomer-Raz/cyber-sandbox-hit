@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { FileTextOutlined, StopOutlined } from '@ant-design/icons'
-import { Button, Card, Flex, Popconfirm, Progress, Space, Steps, Tag, Typography } from 'antd'
+import { Button, Card, Flex, Popconfirm, Progress, Space, Steps, Tag, theme, Typography } from 'antd'
 import { api, type StatusPayload } from '@/api'
 import { useScansStore } from '@/store/scansStore'
 import { toast } from '@/lib/notify'
@@ -15,6 +15,7 @@ import {
 } from '@/lib/constants'
 import { usePolling } from '@/lib/hooks'
 import { formatClock, formatDuration, formatRelativeTime } from '@/lib/format'
+import { useSeverityHex } from '@/theme/palette'
 import { SeverityBar } from '@/components/charts/SeverityBar'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { ResultPage } from '@/components/ui/ResultPage'
@@ -23,6 +24,8 @@ export default function ScanStatus() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const upsert = useScansStore((s) => s.upsert)
+  const { token } = theme.useToken()
+  const severityHex = useSeverityHex()
   const [data, setData] = useState<StatusPayload | null>(null)
   const [error, setError] = useState<string | null>(null)
   const logRef = useRef<HTMLDivElement>(null)
@@ -199,15 +202,14 @@ export default function ScanStatus() {
         >
           {events.map((ev) => {
             const level = EVENT_LEVEL_META[ev.level]
+            const color = level.severity ? severityHex[level.severity] : token.colorTextSecondary
             return (
               <div key={ev.id} style={{ display: 'flex', gap: 10 }}>
-                <span style={{ color: 'rgba(0, 0, 0, 0.35)', flexShrink: 0 }}>
+                <span style={{ color: token.colorTextTertiary, flexShrink: 0 }}>
                   {formatClock(ev.ts)}
                 </span>
-                <span style={{ color: level.hex, flexShrink: 0 }}>{level.glyph}</span>
-                <span style={{ color: level.hex, minWidth: 0, wordBreak: 'break-word' }}>
-                  {ev.message}
-                </span>
+                <span style={{ color, flexShrink: 0 }}>{level.glyph}</span>
+                <span style={{ color, minWidth: 0, wordBreak: 'break-word' }}>{ev.message}</span>
               </div>
             )
           })}

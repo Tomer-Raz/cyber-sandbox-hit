@@ -1,14 +1,12 @@
 import type { PhaseKey, ScanEvent, ScanStatus, ScanType, Severity } from '@/types'
 
+/** Seed for antd's `colorPrimary`; read the derived value via `theme.useToken()`. */
 export const ACCENT_HEX = '#1677ff'
-/** antd text tones: TEXT for body copy, MUTED for axis/secondary labels. */
-export const TEXT = 'rgba(0, 0, 0, 0.65)'
-export const MUTED = 'rgba(0, 0, 0, 0.45)'
 export const APP_NAME = 'Sandbox Playground'
 export const APP_TAGLINE = 'Autonomous Pentest Console'
 
 // ── Severity ──────────────────────────────────────────────
-/** `hex` is the chart fill, `tag` the antd Tag preset. */
+/** `hex` is the light-theme chart fill (see `useSeverityHex`), `tag` the antd Tag preset. */
 export interface SeverityMeta {
   label: string
   hex: string
@@ -122,13 +120,17 @@ export function isRunning(status: ScanStatus): boolean {
 }
 
 // ── Event levels ──────────────────────────────────────────
-/** `timeline` is an antd Timeline preset; `hex`/`glyph` drive the raw log view. */
+/**
+ * `timeline` is an antd Timeline preset; `severity`/`glyph` drive the raw log
+ * view. `severity` maps a level onto the severity palette so the log picks up
+ * theme-correct colors; omitting it means "plain body text".
+ */
 export const EVENT_LEVEL_META: Record<
   ScanEvent['level'],
-  { timeline: string; hex: string; glyph: string }
+  { timeline: string; severity?: Severity; glyph: string }
 > = {
-  info: { timeline: 'blue', hex: TEXT, glyph: '›' },
-  success: { timeline: 'green', hex: '#52c41a', glyph: '✓' },
-  warn: { timeline: 'orange', hex: '#faad14', glyph: '⚠' },
-  error: { timeline: 'red', hex: '#cf1322', glyph: '✗' },
+  info: { timeline: 'blue', glyph: '›' },
+  success: { timeline: 'green', severity: 'low', glyph: '✓' },
+  warn: { timeline: 'orange', severity: 'medium', glyph: '⚠' },
+  error: { timeline: 'red', severity: 'critical', glyph: '✗' },
 }

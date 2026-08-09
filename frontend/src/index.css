@@ -1,8 +1,6 @@
 /* Minimal global styles — antd provides the design system. */
 
-:root {
-  color-scheme: light;
-}
+/* ThemeProvider sets `color-scheme` on <html> to match the active antd theme. */
 
 html,
 body,
