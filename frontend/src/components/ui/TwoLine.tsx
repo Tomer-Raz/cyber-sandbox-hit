@@ -1,4 +1,4 @@
-import { MUTED } from '@/lib/constants'
+import { theme } from 'antd'
 
 /** Table cell: primary value over a smaller muted line. */
 export function TwoLine({
@@ -10,10 +10,18 @@ export function TwoLine({
   secondary: React.ReactNode
   breakAll?: boolean
 }) {
+  const { token } = theme.useToken()
+
   return (
     <div style={{ minWidth: 0 }}>
       <div>{primary}</div>
-      <div style={{ fontSize: 12, color: MUTED, wordBreak: breakAll ? 'break-all' : undefined }}>
+      <div
+        style={{
+          fontSize: 12,
+          color: token.colorTextTertiary,
+          wordBreak: breakAll ? 'break-all' : undefined,
+        }}
+      >
         {secondary}
       </div>
     </div>

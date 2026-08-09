@@ -2,15 +2,17 @@ import { useState } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { GoogleOutlined } from '@ant-design/icons'
 import { GoogleLogin } from '@react-oauth/google'
-import { Button, Card, Flex, Space, Spin, Typography } from 'antd'
+import { Button, Card, Flex, Space, Spin, theme, Typography } from 'antd'
 import { useAuth } from '@/auth/AuthContext'
 import { toast } from '@/lib/notify'
 import { Brand } from '@/components/Brand'
 import { CenteredSpin } from '@/components/ui/CenteredSpin'
 import { APP_TAGLINE } from '@/lib/constants'
+import { ThemeToggle } from '@/theme/ThemeToggle'
 
 export default function Login() {
   const { login, loginWithCredential, isAuthenticated, status, mode } = useAuth()
+  const { token } = theme.useToken()
   const navigate = useNavigate()
   const location = useLocation()
   const [submitting, setSubmitting] = useState(false)
@@ -53,8 +55,16 @@ export default function Login() {
     <Flex
       align="center"
       justify="center"
-      style={{ minHeight: '100dvh', padding: 16, background: '#f5f5f5' }}
+      style={{
+        position: 'relative',
+        minHeight: '100dvh',
+        padding: 16,
+        background: token.colorBgLayout,
+      }}
     >
+      <div style={{ position: 'absolute', top: 16, insetInlineEnd: 16 }}>
+        <ThemeToggle />
+      </div>
       <Card style={{ width: '100%', maxWidth: 400 }}>
         <Space direction="vertical" size="large" style={{ width: '100%' }}>
           <div style={{ textAlign: 'center' }}>

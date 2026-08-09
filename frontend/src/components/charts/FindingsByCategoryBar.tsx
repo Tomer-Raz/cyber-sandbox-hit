@@ -1,8 +1,9 @@
+import { theme } from 'antd'
 import { Bar, BarChart, LabelList, ResponsiveContainer, XAxis, YAxis } from 'recharts'
-import { ACCENT_HEX, TEXT } from '@/lib/constants'
 import type { CategoryCount } from '@/types'
 
 export function FindingsByCategoryBar({ data }: { data: CategoryCount[] }) {
+  const { token } = theme.useToken()
   const rows = [...data].sort((a, b) => b.count - a.count).slice(0, 8)
   const max = Math.max(1, ...rows.map((r) => r.count))
 
@@ -22,16 +23,21 @@ export function FindingsByCategoryBar({ data }: { data: CategoryCount[] }) {
             width={130}
             tickLine={false}
             axisLine={false}
-            tick={{ fontSize: 12, fill: TEXT }}
+            tick={{ fontSize: 12, fill: token.colorTextSecondary }}
           />
           <Bar
             dataKey="count"
             radius={[4, 4, 4, 4]}
-            fill={ACCENT_HEX}
+            fill={token.colorPrimary}
             maxBarSize={16}
             isAnimationActive={false}
           >
-            <LabelList dataKey="count" position="right" fill={TEXT} fontSize={12} />
+            <LabelList
+              dataKey="count"
+              position="right"
+              fill={token.colorTextSecondary}
+              fontSize={12}
+            />
           </Bar>
         </BarChart>
       </ResponsiveContainer>

@@ -11,8 +11,9 @@ import { Button, Card, Col, Row, Space, Statistic } from 'antd'
 import { api } from '@/api'
 import { useAuth } from '@/auth/AuthContext'
 import { useScansStore } from '@/store/scansStore'
-import { isRunning, SEVERITY_META } from '@/lib/constants'
+import { isRunning } from '@/lib/constants'
 import { usePolling } from '@/lib/hooks'
+import { useSeverityHex } from '@/theme/palette'
 import type { DashboardStats } from '@/types'
 import { SeverityBar } from '@/components/charts/SeverityBar'
 import { SeverityDonut } from '@/components/charts/SeverityDonut'
@@ -29,6 +30,7 @@ export default function Dashboard() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const { scans, fetchScans, loaded } = useScansStore()
+  const severityHex = useSeverityHex()
   const [stats, setStats] = useState<DashboardStats | null>(null)
 
   usePolling(() => {
@@ -52,7 +54,7 @@ export default function Dashboard() {
       title: 'Critical',
       value: stats?.criticalFindings,
       icon: <AlertOutlined />,
-      color: SEVERITY_META.critical.hex,
+      color: severityHex.critical,
     },
     {
       title: 'Avg risk score',

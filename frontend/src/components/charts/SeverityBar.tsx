@@ -1,4 +1,6 @@
-import { SEVERITY_META, SEVERITY_ORDER, TEXT } from '@/lib/constants'
+import { theme } from 'antd'
+import { SEVERITY_META, SEVERITY_ORDER } from '@/lib/constants'
+import { useSeverityHex } from '@/theme/palette'
 import type { SeverityCounts } from '@/types'
 
 /** Flat stacked bar showing the severity distribution of a finding set. */
@@ -10,6 +12,8 @@ export function SeverityBar({
   showLegend?: boolean
 }) {
   const total = SEVERITY_ORDER.reduce((a, s) => a + counts[s], 0)
+  const { token } = theme.useToken()
+  const severityHex = useSeverityHex()
 
   return (
     <div>
@@ -19,7 +23,7 @@ export function SeverityBar({
           height: 8,
           borderRadius: 4,
           overflow: 'hidden',
-          background: '#f0f0f0',
+          background: token.colorFillSecondary,
         }}
       >
         {total > 0 &&
@@ -29,7 +33,7 @@ export function SeverityBar({
               title={`${SEVERITY_META[s].label}: ${counts[s]}`}
               style={{
                 width: `${(counts[s] / total) * 100}%`,
-                background: SEVERITY_META[s].hex,
+                background: severityHex[s],
               }}
             />
           ))}
@@ -45,7 +49,7 @@ export function SeverityBar({
                 alignItems: 'center',
                 gap: 6,
                 fontSize: 12,
-                color: TEXT,
+                color: token.colorTextSecondary,
               }}
             >
               <span
@@ -53,7 +57,7 @@ export function SeverityBar({
                   width: 8,
                   height: 8,
                   borderRadius: '50%',
-                  background: SEVERITY_META[s].hex,
+                  background: severityHex[s],
                 }}
               />
               {SEVERITY_META[s].label} <strong>{counts[s]}</strong>

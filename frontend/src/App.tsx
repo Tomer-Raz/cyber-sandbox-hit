@@ -1,6 +1,5 @@
 import { lazy, Suspense } from 'react'
 import { Route, Routes } from 'react-router-dom'
-import { ConfigProvider, theme } from 'antd'
 import { RequireAdmin } from '@/auth/RequireAdmin'
 import { RequireAuth } from '@/auth/RequireAuth'
 import { AppLayout } from '@/components/layout/AppLayout'
@@ -21,51 +20,41 @@ const NotFound = lazy(() => import('@/pages/NotFound'))
 
 export default function App() {
   return (
-    <ConfigProvider
-      theme={{
-        algorithm: theme.darkAlgorithm,
-        token: {
-          colorPrimary: '#1677ff',
-          borderRadius: 6,
-        },
-      }}
-    >
-      <Suspense fallback={<CenteredSpin minHeight="50vh" />}>
-        <Routes>
-          <Route path="/login" element={<Login />} />
+    <Suspense fallback={<CenteredSpin minHeight="50vh" />}>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route
+          element={
+            <RequireAuth>
+              <AppLayout />
+            </RequireAuth>
+          }
+        >
+          <Route index element={<Dashboard />} />
+          <Route path="scans" element={<ScansList />} />
+          <Route path="scans/new" element={<NewScan />} />
+          <Route path="scans/:id" element={<ScanStatus />} />
+          <Route path="scans/:id/report" element={<Report />} />
+          <Route path="settings" element={<Settings />} />
           <Route
+            path="admin/users"
             element={
-              <RequireAuth>
-                <AppLayout />
-              </RequireAuth>
+              <RequireAdmin>
+                <AdminUsers />
+              </RequireAdmin>
             }
-          >
-            <Route index element={<Dashboard />} />
-            <Route path="scans" element={<ScansList />} />
-            <Route path="scans/new" element={<NewScan />} />
-            <Route path="scans/:id" element={<ScanStatus />} />
-            <Route path="scans/:id/report" element={<Report />} />
-            <Route path="settings" element={<Settings />} />
-            <Route
-              path="admin/users"
-              element={
-                <RequireAdmin>
-                  <AdminUsers />
-                </RequireAdmin>
-              }
-            />
-            <Route
-              path="admin/scans"
-              element={
-                <RequireAdmin>
-                  <AdminScans />
-                </RequireAdmin>
-              }
-            />
-          </Route>
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </Suspense>
-    </ConfigProvider>
+          />
+          <Route
+            path="admin/scans"
+            element={
+              <RequireAdmin>
+                <AdminScans />
+              </RequireAdmin>
+            }
+          />
+        </Route>
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </Suspense>
   )
 }

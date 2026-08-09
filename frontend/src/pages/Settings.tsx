@@ -13,11 +13,13 @@ import {
   Popconfirm,
   Space,
   Switch,
+  theme,
   Typography,
 } from 'antd'
 import { useAuth } from '@/auth/AuthContext'
-import { ACCENT_HEX } from '@/lib/constants'
 import { toast } from '@/lib/notify'
+import { THEME_STORAGE_KEY } from '@/theme/ThemeContext'
+import { ThemeSegmented } from '@/theme/ThemeToggle'
 
 const PREFS: { key: string; label: string; extra: string; default: boolean }[] = [
   {
@@ -49,6 +51,7 @@ function genApiKey(): string {
 
 export default function Settings() {
   const { user, logout, mode } = useAuth()
+  const { token } = theme.useToken()
   const navigate = useNavigate()
   const [apiKey, setApiKey] = useState(genApiKey)
 
@@ -72,7 +75,7 @@ export default function Settings() {
     <Space direction="vertical" size="large" style={{ width: '100%', maxWidth: 800 }}>
       <Card title="Profile">
         <Flex gap={16} align="center" wrap>
-          <Avatar size={56} style={{ backgroundColor: ACCENT_HEX }}>
+          <Avatar size={56} style={{ backgroundColor: token.colorPrimary }}>
             {user.initials}
           </Avatar>
           <div style={{ minWidth: 0 }}>
@@ -100,6 +103,16 @@ export default function Settings() {
         <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 12 }}>
           Profile details are managed by your Google account.
         </Typography.Text>
+      </Card>
+
+      <Card title="Appearance">
+        <Flex wrap gap={12} align="center" justify="space-between">
+          <Typography.Text type="secondary">
+            Choose a colour scheme. <Typography.Text code>System</Typography.Text> follows your
+            operating system setting.
+          </Typography.Text>
+          <ThemeSegmented />
+        </Flex>
       </Card>
 
       <Card title="Notifications & automation">
@@ -158,7 +171,10 @@ export default function Settings() {
               title="Reset demo data?"
               description="Clears local session and simulated scans."
               onConfirm={() => {
+                // Appearance is a UI preference, not demo data — keep it.
+                const savedTheme = localStorage.getItem(THEME_STORAGE_KEY)
                 localStorage.clear()
+                if (savedTheme) localStorage.setItem(THEME_STORAGE_KEY, savedTheme)
                 window.location.reload()
               }}
             >

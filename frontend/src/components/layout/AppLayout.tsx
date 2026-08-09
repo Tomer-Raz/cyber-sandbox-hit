@@ -11,10 +11,24 @@ import {
   TeamOutlined,
 } from '@ant-design/icons'
 import type { MenuProps } from 'antd'
-import { Avatar, Button, Drawer, Dropdown, Grid, Layout, Menu, Space, Tag, Typography } from 'antd'
+import {
+  Avatar,
+  Button,
+  Drawer,
+  Dropdown,
+  Grid,
+  Layout,
+  Menu,
+  Space,
+  Tag,
+  theme,
+  Typography,
+} from 'antd'
 import { useAuth } from '@/auth/AuthContext'
 import { Brand } from '@/components/Brand'
-import { ACCENT_HEX, APP_NAME } from '@/lib/constants'
+import { APP_NAME } from '@/lib/constants'
+import { useThemeMode } from '@/theme/ThemeContext'
+import { ThemeToggle } from '@/theme/ThemeToggle'
 import { ADMIN_ROLE } from '@/types'
 
 const { Header, Sider, Content } = Layout
@@ -52,11 +66,12 @@ function routeFor(pathname: string) {
   return ROUTES.find((r) => r.match(pathname)) ?? { key: pathname, title: APP_NAME }
 }
 
-const HAIRLINE = '1px solid rgba(5, 5, 5, 0.06)'
-
 export function AppLayout() {
   const screens = Grid.useBreakpoint()
   const isMobile = !screens.md
+  const { token } = theme.useToken()
+  const { resolved } = useThemeMode()
+  const hairline = `1px solid ${token.colorSplit}`
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const location = useLocation()
@@ -105,12 +120,12 @@ export function AppLayout() {
     <Layout style={{ minHeight: '100dvh' }}>
       {!isMobile && (
         <Sider
-          theme="light"
+          theme={resolved}
           width={220}
           collapsible
           collapsed={collapsed}
           onCollapse={setCollapsed}
-          style={{ borderInlineEnd: HAIRLINE }}
+          style={{ borderInlineEnd: hairline }}
         >
           <div
             style={{
@@ -137,8 +152,8 @@ export function AppLayout() {
             alignItems: 'center',
             gap: 12,
             paddingInline: 16,
-            background: '#fff',
-            borderBottom: HAIRLINE,
+            background: token.colorBgContainer,
+            borderBottom: hairline,
           }}
         >
           {isMobile && (
@@ -152,10 +167,11 @@ export function AppLayout() {
           <Typography.Title level={5} style={{ margin: 0, flex: 1, lineHeight: 1.4 }} ellipsis>
             {route.title}
           </Typography.Title>
+          <ThemeToggle />
           <Dropdown menu={{ items: userMenu }} trigger={['click']}>
             <Button type="text" style={{ height: 48, paddingInline: 8 }}>
               <Space size={8}>
-                <Avatar size="small" style={{ backgroundColor: ACCENT_HEX }}>
+                <Avatar size="small" style={{ backgroundColor: token.colorPrimary }}>
                   {user?.initials}
                 </Avatar>
                 {!isMobile && <span>{user?.name}</span>}

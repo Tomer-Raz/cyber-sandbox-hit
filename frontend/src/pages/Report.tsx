@@ -4,8 +4,9 @@ import { DownloadOutlined, FilePdfOutlined } from '@ant-design/icons'
 import { Button, Card, Col, Flex, Progress, Row, Space, Statistic, Timeline, Typography } from 'antd'
 import { api } from '@/api'
 import { toast } from '@/lib/notify'
-import { EVENT_LEVEL_META, SCAN_TYPE_META, SEVERITY_META } from '@/lib/constants'
+import { EVENT_LEVEL_META, SCAN_TYPE_META } from '@/lib/constants'
 import { formatDateTime, riskBand } from '@/lib/format'
+import { useSeverityHex } from '@/theme/palette'
 import type { ScanReport } from '@/types'
 import { FindingsByCategoryBar } from '@/components/charts/FindingsByCategoryBar'
 import { SeverityBar } from '@/components/charts/SeverityBar'
@@ -16,6 +17,7 @@ import { ResultPage } from '@/components/ui/ResultPage'
 
 export default function Report() {
   const { id } = useParams<{ id: string }>()
+  const severityHex = useSeverityHex()
   const [report, setReport] = useState<ScanReport | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -56,7 +58,7 @@ export default function Report() {
   }
 
   const band = riskBand(scan.riskScore)
-  const bandHex = SEVERITY_META[band.tone].hex
+  const bandHex = severityHex[band.tone]
 
   const exportJson = () => {
     const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' })
@@ -79,12 +81,12 @@ export default function Report() {
     {
       title: 'Critical + High',
       value: scan.counts.critical + scan.counts.high,
-      color: SEVERITY_META.critical.hex,
+      color: severityHex.critical,
     },
     {
       title: 'Validated',
       value: findings.filter((f) => f.validated).length,
-      color: SEVERITY_META.low.hex,
+      color: severityHex.low,
     },
     { title: 'CVEs matched', value: new Set(findings.flatMap((f) => f.cveIds)).size },
   ]

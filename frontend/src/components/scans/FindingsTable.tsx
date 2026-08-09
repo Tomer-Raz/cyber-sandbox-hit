@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Descriptions, Space, Tag, Typography } from 'antd'
+import { Descriptions, Space, Tag, theme, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { SEVERITY_META, SEVERITY_ORDER } from '@/lib/constants'
 import { formatDateTime } from '@/lib/format'
@@ -10,6 +10,8 @@ import { FilterBar } from '@/components/ui/FilterBar'
 import { TwoLine } from '@/components/ui/TwoLine'
 
 function FindingDetail({ f }: { f: Finding }) {
+  const { token } = theme.useToken()
+
   return (
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
       <Typography.Paragraph style={{ marginBottom: 0 }}>{f.description}</Typography.Paragraph>
@@ -48,9 +50,9 @@ function FindingDetail({ f }: { f: Finding }) {
           style={{
             marginTop: 6,
             padding: '8px 10px',
-            background: '#fafafa',
-            border: '1px solid #f0f0f0',
-            borderRadius: 6,
+            background: token.colorFillQuaternary,
+            border: `1px solid ${token.colorBorderSecondary}`,
+            borderRadius: token.borderRadius,
             fontSize: 12,
             wordBreak: 'break-all',
           }}
