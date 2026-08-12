@@ -14,7 +14,7 @@ from app.models.user import User
 from app.routers import scans as scans_router
 from app.services import report_service, scanner_job_service
 from app.services.scanner_job_service import ScannerJobError
-from tests.conftest import FakeResult, FakeSession, make
+from tests.conftest import FakeResult, FakeSession, make, passthrough_target_url
 
 client = TestClient(app)
 
@@ -85,7 +85,7 @@ def test_create_scan_400_when_target_no_longer_resolves_safely(monkeypatch):
     target = make(Target, user_id=user.id, url="https://target.example", approved=True)
     _with_session(FakeSession(execute_results=[FakeResult([target])]))
 
-    def raise_unsafe(url):
+    async def raise_unsafe(url):
         raise scans_router.UnsafeTargetURLError("now resolves to a disallowed address")
 
     monkeypatch.setattr(scans_router, "validate_target_url", raise_unsafe)
@@ -101,7 +101,7 @@ def test_create_scan_502_and_rolls_back_when_job_fails_to_start(monkeypatch):
     target = make(Target, user_id=user.id, url="https://target.example", approved=True)
     session = FakeSession(execute_results=[FakeResult([target])])
     _with_session(session)
-    monkeypatch.setattr(scans_router, "validate_target_url", lambda url: url)
+    monkeypatch.setattr(scans_router, "validate_target_url", passthrough_target_url)
 
     async def fail_start(**_kwargs):
         raise ScannerJobError("Cloud Run unavailable")
@@ -124,7 +124,7 @@ def test_create_scan_success_starts_job_and_returns_running(monkeypatch):
     _with_session(
         FakeSession(execute_results=[FakeResult([target]), FakeResult([config])])
     )
-    monkeypatch.setattr(scans_router, "validate_target_url", lambda url: url)
+    monkeypatch.setattr(scans_router, "validate_target_url", passthrough_target_url)
 
     async def fake_start(**_kwargs):
         return "projects/p/locations/l/jobs/j/executions/e1"

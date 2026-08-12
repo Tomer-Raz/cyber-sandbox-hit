@@ -149,3 +149,10 @@ class FakeFirestoreClient:
 
     def collection(self, _name):
         return self.collection_ref
+
+
+async def passthrough_target_url(url):
+    """Stand-in for `validate_target_url` in tests that aren't testing the SSRF
+    gate. Async because the routers await it.
+    """
+    return url

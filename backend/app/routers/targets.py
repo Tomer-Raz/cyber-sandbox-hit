@@ -32,7 +32,7 @@ async def create_target(
     db: AsyncSession = Depends(get_db),
 ) -> Target:
     try:
-        url = validate_target_url(body.url)
+        url = await validate_target_url(body.url)
     except UnsafeTargetURLError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 

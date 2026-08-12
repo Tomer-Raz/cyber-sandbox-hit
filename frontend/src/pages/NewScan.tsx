@@ -87,7 +87,7 @@ export default function NewScan() {
           <Form.Item
             name="target"
             label="URL, domain, or IP address"
-            extra="The system or application you are authorized to test."
+            extra="The system or application you are authorized to test. A bare domain is resolved to whichever address actually answers."
             rules={[
               { required: true, message: 'A target URL or IP is required' },
               {
