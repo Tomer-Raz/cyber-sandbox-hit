@@ -11,7 +11,6 @@ const DEMO_USER: AppUser = {
   name: 'John Doe',
   email: 'john.doe@hit.ac.il',
   role: ADMIN_ROLE,
-  org: 'HIT · Cyber Lab',
   initials: 'JD',
 }
 

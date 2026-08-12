@@ -1,25 +1,8 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { CopyOutlined, KeyOutlined, LogoutOutlined, ReloadOutlined } from '@ant-design/icons'
-import {
-  Alert,
-  Avatar,
-  Button,
-  Card,
-  Descriptions,
-  Flex,
-  Form,
-  Input,
-  Popconfirm,
-  Space,
-  Switch,
-  theme,
-  Typography,
-} from 'antd'
+import { Avatar, Card, Descriptions, Flex, Form, Space, Switch, theme, Typography } from 'antd'
 import { useAuth } from '@/auth/AuthContext'
 import { toast } from '@/lib/notify'
-import { THEME_STORAGE_KEY } from '@/theme/ThemeContext'
 import { ThemeSegmented } from '@/theme/ThemeToggle'
+import { ADMIN_ROLE } from '@/types'
 
 const PREFS: { key: string; label: string; extra: string; default: boolean }[] = [
   {
@@ -28,46 +11,11 @@ const PREFS: { key: string; label: string; extra: string; default: boolean }[] =
     extra: 'Notify me when a scan finds critical or high-severity issues',
     default: true,
   },
-  {
-    key: 'autoValidate',
-    label: 'Auto-run exploit validation',
-    extra: 'Validate high-risk findings automatically after each scan',
-    default: true,
-  },
-  {
-    key: 'weeklyDigest',
-    label: 'Weekly digest',
-    extra: 'A Monday summary of scan activity and open risks',
-    default: false,
-  },
 ]
 
-function genApiKey(): string {
-  const bytes = new Uint8Array(16)
-  if (typeof crypto !== 'undefined' && crypto.getRandomValues) crypto.getRandomValues(bytes)
-  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
-  return `sbx_live_${hex}`
-}
-
 export default function Settings() {
-  const { user, logout, mode } = useAuth()
+  const { user } = useAuth()
   const { token } = theme.useToken()
-  const navigate = useNavigate()
-  const [apiKey, setApiKey] = useState(genApiKey)
-
-  const copyKey = async () => {
-    try {
-      await navigator.clipboard.writeText(apiKey)
-      toast.success('API key copied to clipboard')
-    } catch {
-      toast.error('Copy failed')
-    }
-  }
-
-  const regenerate = () => {
-    setApiKey(genApiKey())
-    toast.warning('API key regenerated', 'The previous key has been revoked.')
-  }
 
   if (!user) return null
 
@@ -93,10 +41,13 @@ export default function Settings() {
           style={{ marginTop: 20 }}
           size="small"
           bordered
-          column={{ xs: 1, sm: 2 }}
+          column={1}
           items={[
-            { key: 'role', label: 'Role', children: user.role },
-            { key: 'org', label: 'Organisation', children: user.org },
+            {
+              key: 'role',
+              label: 'Role',
+              children: user.role === ADMIN_ROLE ? 'Admin' : 'User',
+            },
           ]}
         />
 
@@ -134,65 +85,6 @@ export default function Settings() {
             </Form.Item>
           ))}
         </Form>
-      </Card>
-
-      <Card title="API access">
-        <Typography.Paragraph type="secondary">
-          Use this key to trigger scans from CI pipelines or scripts against the FastAPI backend.
-        </Typography.Paragraph>
-
-        <Alert
-          message="Security Note"
-          description="Your API key is hashed on the backend. Store it securely in your secrets manager.
-          If lost, rotate it to generate a new key."
-          type="info"
-          showIcon
-          icon={<KeyOutlined />}
-          style={{ marginBottom: 16 }}
-        />
-
-        <Input.Password readOnly value={apiKey} className="mono" />
-        <Space wrap style={{ marginTop: 12 }}>
-          <Button icon={<CopyOutlined />} onClick={copyKey}>
-            Copy
-          </Button>          <Button icon={<ReloadOutlined />} onClick={regenerate}>
-            Rotate
-          </Button>
-        </Space>
-      </Card>
-
-      <Card title="Session">
-        <Flex wrap gap={12} align="center" justify="space-between">
-          <Typography.Text type="secondary">
-            Signed in via <Typography.Text code>{mode === 'google' ? 'Google' : 'demo (mock)'}</Typography.Text>
-          </Typography.Text>
-          <Space wrap>
-            <Popconfirm
-              title="Reset demo data?"
-              description="Clears local session and simulated scans."
-              onConfirm={() => {
-                // Appearance is a UI preference, not demo data — keep it.
-                const savedTheme = localStorage.getItem(THEME_STORAGE_KEY)
-                localStorage.clear()
-                if (savedTheme) localStorage.setItem(THEME_STORAGE_KEY, savedTheme)
-                window.location.reload()
-              }}
-            >
-              <Button icon={<ReloadOutlined />}>Reset demo data</Button>
-            </Popconfirm>
-            <Button
-              danger
-              icon={<LogoutOutlined />}
-              onClick={() => {
-                logout()
-                toast.info('Signed out')
-                navigate('/login')
-              }}
-            >
-              Sign out
-            </Button>
-          </Space>
-        </Flex>
       </Card>
     </Space>
   )

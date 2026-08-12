@@ -1,8 +1,6 @@
 import os
 import base64
 import json
-import bcrypt
-from typing import Tuple
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import hashes, serialization
@@ -34,26 +32,6 @@ class SymmetricCrypto:
         
         decrypted_bytes = aesgcm.decrypt(nonce, ciphertext, associated_data=None)
         return json.loads(decrypted_bytes.decode("utf-8"))
-
-
-class APIKeyManager:
-    """Salt + Hash management for user API keys using native bcrypt."""
-    @staticmethod
-    def generate_api_key() -> Tuple[str, str]:
-        raw_key = f"sbx_{base64.urlsafe_b64encode(os.urandom(32)).decode('utf-8').rstrip('=')}"
-        salt = bcrypt.gensalt()
-        hashed_bytes = bcrypt.hashpw(raw_key.encode("utf-8"), salt)
-        return raw_key, hashed_bytes.decode("utf-8")
-
-    @staticmethod
-    def verify_api_key(raw_key: str, hashed_key_from_db: str) -> bool:
-        try:
-            return bcrypt.checkpw(
-                raw_key.encode("utf-8"),
-                hashed_key_from_db.encode("utf-8")
-            )
-        except Exception:
-            return False
 
 
 class ReportSigner:

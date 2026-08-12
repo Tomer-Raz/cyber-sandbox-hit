@@ -20,7 +20,6 @@ function backendUserToAppUser(user: BackendUser): AppUser {
     name: user.name,
     email: user.email,
     role: user.role,
-    org: 'Google Account',
     initials: initialsFromName(user.name),
   }
 }

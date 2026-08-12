@@ -141,7 +141,6 @@ export interface AppUser {
   name: string
   email: string
   role: string
-  org: string
   initials: string
 }
 
