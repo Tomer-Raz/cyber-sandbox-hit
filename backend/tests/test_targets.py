@@ -9,7 +9,7 @@ from app.main import app
 from app.models.target import Target
 from app.models.user import User
 from app.routers import targets as targets_router
-from tests.conftest import FakeResult, FakeSession, make
+from tests.conftest import FakeResult, FakeSession, make, passthrough_target_url
 
 client = TestClient(app)
 
@@ -51,7 +51,7 @@ def test_create_target_rejects_unsafe_url(monkeypatch):
     app.dependency_overrides[get_current_user] = lambda: _override_user()
     _with_session(FakeSession())
 
-    def raise_unsafe(url):
+    async def raise_unsafe(url):
         raise targets_router.UnsafeTargetURLError("Target resolves to a disallowed address")
 
     monkeypatch.setattr(targets_router, "validate_target_url", raise_unsafe)
@@ -64,7 +64,7 @@ def test_create_target_rejects_unsafe_url(monkeypatch):
 def test_create_target_auto_approves_safe_url(monkeypatch):
     app.dependency_overrides[get_current_user] = lambda: _override_user()
     _with_session(FakeSession())
-    monkeypatch.setattr(targets_router, "validate_target_url", lambda url: url)
+    monkeypatch.setattr(targets_router, "validate_target_url", passthrough_target_url)
 
     resp = client.post(
         "/api/targets/", json={"url": "https://target.example", "description": "test target"}
