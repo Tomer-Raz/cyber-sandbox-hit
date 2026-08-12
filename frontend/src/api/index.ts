@@ -1,6 +1,7 @@
 import type {
   AdminScan,
   AdminUser,
+  AdminUserDetail,
   DashboardStats,
   Scan,
   ScanEvent,
@@ -12,6 +13,7 @@ import * as engine from './mock/engine'
 import {
   toAdminScan,
   toAdminUser,
+  toAdminUserDetail,
   toApiScanType,
   toDashboardStats,
   toScan,
@@ -19,6 +21,7 @@ import {
   toScanReport,
   type ApiAdminScan,
   type ApiAdminUser,
+  type ApiAdminUserDetail,
   type ApiDashboard,
   type ApiScan,
   type ApiScanEvent,
@@ -120,5 +123,24 @@ export const api = {
   listAdminScans: (): Promise<AdminScan[]> =>
     route(engine.adminScans, async () =>
       (await http.get<ApiAdminScan[]>('/admin/scans')).data.map(toAdminScan),
+    ),
+
+  getAdminUser: (id: string): Promise<AdminUserDetail> =>
+    route(
+      () => engine.adminUser(id),
+      async () =>
+        toAdminUserDetail((await http.get<ApiAdminUserDetail>(`/admin/users/${id}`)).data),
+      id,
+    ),
+
+  setAdminUserBlocked: (id: string, blocked: boolean): Promise<AdminUser> =>
+    route(
+      () => engine.setAdminUserBlocked(id, blocked),
+      async () =>
+        toAdminUser(
+          (await http.post<ApiAdminUser>(`/admin/users/${id}/${blocked ? 'block' : 'unblock'}`))
+            .data,
+        ),
+      id,
     ),
 }

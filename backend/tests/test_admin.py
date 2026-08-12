@@ -12,6 +12,7 @@ from app.models.scan import Scan
 from app.models.scan_config import ScanConfig
 from app.models.target import Target
 from app.models.user import User
+from app.routers import admin as admin_router
 from app.services import finding_stats_service
 from tests.conftest import FakeResult, FakeSession, make
 
@@ -223,12 +224,198 @@ def test_regular_user_still_cannot_open_another_users_scan():
     assert resp.status_code == 404
 
 
-def test_admin_router_exposes_no_write_routes():
-    """Identity comes from Google and role from IAM, so nothing here mutates."""
-    methods = {
-        method
+def test_blocking_is_the_only_thing_admins_can_write():
+    """Identity comes from Google and role from IAM, so neither is editable.
+
+    Blocking is the sole exception, so any *other* write route appearing under
+    /api/admin means something upstream-owned has been made editable here.
+    """
+    writes = {
+        (route.path, method)
         for route in app.routes
         if getattr(route, "path", "").startswith("/api/admin")
-        for method in route.methods
+        for method in getattr(route, "methods", set())
+        if method not in {"GET", "HEAD", "OPTIONS"}
     }
-    assert methods <= {"GET", "HEAD", "OPTIONS"}
+    assert writes == {
+        ("/api/admin/users/{user_id}/block", "POST"),
+        ("/api/admin/users/{user_id}/unblock", "POST"),
+    }
+
+
+# ── User detail ───────────────────────────────────────────────────────────────
+
+
+def _stub_audit_events(monkeypatch, events):
+    async def fake_get_audit_events(user_id, limit=200):
+        return list(events)
+
+    monkeypatch.setattr(admin_router.audit_service, "get_audit_events", fake_get_audit_events)
+
+
+def _capture_audit_events(monkeypatch) -> list[dict]:
+    written: list[dict] = []
+
+    async def fake_log(user_id, action, **extra):
+        written.append({"user_id": user_id, "action": action, **extra})
+
+    monkeypatch.setattr(admin_router.audit_service, "log_audit_event", fake_log)
+    return written
+
+
+def test_user_detail_separates_sign_ins_from_other_activity(monkeypatch):
+    admin = _user(email=ADMIN_EMAIL, name="Ada", role="admin")
+    member = _user()
+    signed_in_at = datetime.now(timezone.utc) - timedelta(hours=1)
+
+    _stub_audit_events(
+        monkeypatch,
+        [
+            {"action": "signed_in", "timestamp": signed_in_at, "user_id": str(member.id)},
+            {
+                "action": "scan_started",
+                "timestamp": signed_in_at,
+                "user_id": str(member.id),
+                "scan_id": "scan-1",
+            },
+        ],
+    )
+    app.dependency_overrides[get_current_user] = lambda: admin
+    app.dependency_overrides[get_db] = lambda: FakeSession(
+        execute_results=[FakeResult([(member, 4, signed_in_at)])],
+        scalar_results=[2, signed_in_at],
+    )
+
+    body = client.get(
+        f"/api/admin/users/{member.id}", headers={"Authorization": "Bearer whatever"}
+    ).json()
+
+    assert body["scan_count"] == 4
+    assert body["target_count"] == 2
+    assert [e["action"] for e in body["sign_ins"]] == ["signed_in"]
+    assert [e["action"] for e in body["activity"]] == ["scan_started"]
+    # Extras ride along in `details` rather than needing a column each.
+    assert body["activity"][0]["details"]["scan_id"] == "scan-1"
+    # user_id is the key the events were queried by, not new information.
+    assert "user_id" not in body["activity"][0]["details"]
+
+
+def test_user_detail_404s_for_an_unknown_user():
+    admin = _user(email=ADMIN_EMAIL, name="Ada", role="admin")
+    app.dependency_overrides[get_current_user] = lambda: admin
+    app.dependency_overrides[get_db] = lambda: FakeSession(execute_results=[FakeResult([])])
+
+    resp = client.get(
+        f"/api/admin/users/{uuid.uuid4()}", headers={"Authorization": "Bearer whatever"}
+    )
+    assert resp.status_code == 404
+
+
+# ── Blocking ──────────────────────────────────────────────────────────────────
+
+
+def test_blocking_a_user_records_who_did_it(monkeypatch):
+    admin = _user(email=ADMIN_EMAIL, name="Ada", role="admin")
+    member = _user()
+    written = _capture_audit_events(monkeypatch)
+
+    app.dependency_overrides[get_current_user] = lambda: admin
+    app.dependency_overrides[get_db] = lambda: FakeSession(
+        execute_results=[FakeResult([(member, 0, None)])],
+        get_results={member.id: member},
+    )
+
+    resp = client.post(
+        f"/api/admin/users/{member.id}/block", headers={"Authorization": "Bearer whatever"}
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["blocked_at"] is not None
+    assert member.blocked_at is not None
+    # Attribution is the point: a block with no actor is not auditable.
+    assert member.blocked_by == admin.id
+    assert written == [
+        {
+            "user_id": str(member.id),
+            "action": "user_blocked",
+            "actor_id": str(admin.id),
+            "actor_email": ADMIN_EMAIL,
+        }
+    ]
+
+
+def test_blocking_an_admin_is_refused(monkeypatch):
+    """Stops self-lockout and one admin evicting another."""
+    admin = _user(email=ADMIN_EMAIL, name="Ada", role="admin")
+    other_admin = _user(email="second@example.com", name="Bob", role="admin")
+    written = _capture_audit_events(monkeypatch)
+
+    app.dependency_overrides[get_current_user] = lambda: admin
+    app.dependency_overrides[get_db] = lambda: FakeSession(
+        get_results={other_admin.id: other_admin, admin.id: admin}
+    )
+
+    for target in (other_admin, admin):
+        resp = client.post(
+            f"/api/admin/users/{target.id}/block", headers={"Authorization": "Bearer whatever"}
+        )
+        assert resp.status_code == 409
+        assert "IAM" in resp.json()["detail"]
+        assert target.blocked_at is None
+
+    assert written == []
+
+
+def test_unblocking_clears_the_block_and_its_attribution(monkeypatch):
+    admin = _user(email=ADMIN_EMAIL, name="Ada", role="admin")
+    member = _user()
+    member.blocked_at = datetime.now(timezone.utc)
+    member.blocked_by = admin.id
+    written = _capture_audit_events(monkeypatch)
+
+    app.dependency_overrides[get_current_user] = lambda: admin
+    app.dependency_overrides[get_db] = lambda: FakeSession(
+        execute_results=[FakeResult([(member, 0, None)])],
+        get_results={member.id: member},
+    )
+
+    resp = client.post(
+        f"/api/admin/users/{member.id}/unblock", headers={"Authorization": "Bearer whatever"}
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["blocked_at"] is None
+    assert member.blocked_at is None
+    assert member.blocked_by is None
+    assert [e["action"] for e in written] == ["user_unblocked"]
+
+
+def test_blocking_an_already_blocked_user_does_not_re_stamp_it(monkeypatch):
+    """Re-blocking would otherwise overwrite when the block actually started."""
+    admin = _user(email=ADMIN_EMAIL, name="Ada", role="admin")
+    member = _user()
+    original = datetime.now(timezone.utc) - timedelta(days=2)
+    member.blocked_at = original
+    written = _capture_audit_events(monkeypatch)
+
+    app.dependency_overrides[get_current_user] = lambda: admin
+    app.dependency_overrides[get_db] = lambda: FakeSession(
+        execute_results=[FakeResult([(member, 0, None)])],
+        get_results={member.id: member},
+    )
+
+    client.post(f"/api/admin/users/{member.id}/block", headers={"Authorization": "Bearer whatever"})
+
+    assert member.blocked_at == original
+    assert written == []
+
+
+def test_blocking_an_unknown_user_404s():
+    admin = _user(email=ADMIN_EMAIL, name="Ada", role="admin")
+    app.dependency_overrides[get_current_user] = lambda: admin
+    app.dependency_overrides[get_db] = lambda: FakeSession()
+
+    resp = client.post(
+        f"/api/admin/users/{uuid.uuid4()}/block", headers={"Authorization": "Bearer whatever"}
+    )
+    assert resp.status_code == 404

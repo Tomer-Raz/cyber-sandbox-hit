@@ -146,7 +146,7 @@ export interface AppUser {
 
 export const ADMIN_ROLE = 'admin'
 
-/** Read-only by design: every field is owned by Google account or GCP IAM. */
+/** Identity is owned by the Google account and role by GCP IAM; only `blockedAt` is ours. */
 export interface AdminUser {
   id: string
   name: string
@@ -155,6 +155,23 @@ export interface AdminUser {
   createdAt: string
   scanCount: number
   lastScanAt: string | null
+  lastLoginAt: string | null
+  blockedAt: string | null
+}
+
+/** One entry from the audit trail. `details` varies by action, so it stays untyped. */
+export interface ActivityEvent {
+  action: string
+  timestamp: string | null
+  details: Record<string, unknown>
+}
+
+export interface AdminUserDetail extends AdminUser {
+  blockedByEmail: string | null
+  targetCount: number
+  firstScanAt: string | null
+  activity: ActivityEvent[]
+  signIns: ActivityEvent[]
 }
 
 /** A scan row from the admin view, where `requestedBy` is often someone else. */

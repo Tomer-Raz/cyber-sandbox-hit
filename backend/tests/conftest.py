@@ -63,8 +63,13 @@ class FakeSession:
     make a known, fixed sequence of queries, read off the source.
     """
 
-    def __init__(self, execute_results=None):
+    def __init__(self, execute_results=None, scalar_results=None, get_results=None):
         self._results = list(execute_results or [])
+        # Queued separately from execute(): `session.scalar()` is used for the
+        # standalone COUNT/MIN lookups, so interleaving them in one queue would
+        # make each test depend on the order the two kinds happen to be called.
+        self._scalars = list(scalar_results or [])
+        self._gets = dict(get_results or {})
         self.added = []
         self.deleted = []
         self.committed = False
@@ -74,6 +79,14 @@ class FakeSession:
         if not self._results:
             raise AssertionError("FakeSession.execute() called more times than results queued")
         return self._results.pop(0)
+
+    async def scalar(self, *_args, **_kwargs):
+        if not self._scalars:
+            raise AssertionError("FakeSession.scalar() called more times than results queued")
+        return self._scalars.pop(0)
+
+    async def get(self, _model, pk):
+        return self._gets.get(pk)
 
     def add(self, obj):
         apply_orm_defaults(obj)

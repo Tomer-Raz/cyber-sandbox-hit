@@ -2,8 +2,10 @@
 // store has to know which backend it is talking to.
 
 import type {
+  ActivityEvent,
   AdminScan,
   AdminUser,
+  AdminUserDetail,
   AiInsight,
   Confidence,
   Finding,
@@ -89,6 +91,22 @@ export interface ApiAdminUser {
   created_at: string
   scan_count: number
   last_scan_at: string | null
+  last_login_at: string | null
+  blocked_at: string | null
+}
+
+export interface ApiActivityEvent {
+  action: string
+  timestamp: string | null
+  details: Record<string, unknown>
+}
+
+export interface ApiAdminUserDetail extends ApiAdminUser {
+  blocked_by_email: string | null
+  target_count: number
+  first_scan_at: string | null
+  activity: ApiActivityEvent[]
+  sign_ins: ApiActivityEvent[]
 }
 
 export interface ApiAdminScan extends ApiScan {
@@ -263,6 +281,23 @@ export function toAdminUser(dto: ApiAdminUser): AdminUser {
     createdAt: dto.created_at,
     scanCount: dto.scan_count,
     lastScanAt: dto.last_scan_at,
+    lastLoginAt: dto.last_login_at,
+    blockedAt: dto.blocked_at,
+  }
+}
+
+function toActivityEvent(dto: ApiActivityEvent): ActivityEvent {
+  return { action: dto.action, timestamp: dto.timestamp, details: dto.details ?? {} }
+}
+
+export function toAdminUserDetail(dto: ApiAdminUserDetail): AdminUserDetail {
+  return {
+    ...toAdminUser(dto),
+    blockedByEmail: dto.blocked_by_email,
+    targetCount: dto.target_count,
+    firstScanAt: dto.first_scan_at,
+    activity: (dto.activity ?? []).map(toActivityEvent),
+    signIns: (dto.sign_ins ?? []).map(toActivityEvent),
   }
 }
 

@@ -1,6 +1,8 @@
 import type {
+  ActivityEvent,
   AdminScan,
   AdminUser,
+  AdminUserDetail,
   AiInsight,
   DashboardStats,
   Finding,
@@ -426,24 +428,79 @@ export function adminScans(): AdminScan[] {
   return listScans().map((scan) => ({ ...scan, requestedByEmail: emailFor(scan.requestedBy) }))
 }
 
+const DAY_MS = 24 * 60 * MIN
+
+// Block state is the one thing the mock has to remember across calls, since
+// blocking and then re-reading the roster has to agree with itself.
+const blockedAtById = new Map<string, string>()
+
 export function adminUsers(): AdminUser[] {
   const scans = listScans()
-  const dayMs = 24 * 60 * MIN
   return REQUESTERS.map((name, i) => {
     const theirs = scans.filter((s) => s.requestedBy === name)
     const lastScanAt = theirs.reduce<string | null>(
       (latest, s) => (!latest || s.createdAt > latest ? s.createdAt : latest),
       null,
     )
+    const id = `usr_${(i + 1).toString().padStart(4, '0')}`
     return {
-      id: `usr_${(i + 1).toString().padStart(4, '0')}`,
+      id,
       name,
       email: emailFor(name),
       // Mirrors the real backend: exactly one allowlisted admin.
       role: i === 0 ? 'admin' : 'user',
-      createdAt: new Date(NOW - (30 + i * 12) * dayMs).toISOString(),
+      createdAt: new Date(NOW - (30 + i * 12) * DAY_MS).toISOString(),
       scanCount: theirs.length,
       lastScanAt,
+      lastLoginAt: new Date(NOW - (i * 3 + 1) * 40 * MIN).toISOString(),
+      blockedAt: blockedAtById.get(id) ?? null,
     }
   })
+}
+
+export function adminUser(id: string): AdminUserDetail | undefined {
+  const user = adminUsers().find((u) => u.id === id)
+  if (!user) return undefined
+
+  const theirs = listScans().filter((s) => s.requestedBy === user.name)
+  const firstScanAt = theirs.reduce<string | null>(
+    (earliest, s) => (!earliest || s.createdAt < earliest ? s.createdAt : earliest),
+    null,
+  )
+
+  const activity: ActivityEvent[] = theirs.slice(0, 12).map((s) => ({
+    action: s.status === 'canceled' ? 'scan_cancelled' : 'scan_started',
+    timestamp: s.createdAt,
+    details: { scan_id: s.id, target: s.target },
+  }))
+  if (user.blockedAt) {
+    activity.unshift({
+      action: 'user_blocked',
+      timestamp: user.blockedAt,
+      details: { actor_email: emailFor(REQUESTERS[0]) },
+    })
+  }
+
+  const signIns: ActivityEvent[] = Array.from({ length: 6 }, (_, n) => ({
+    action: 'signed_in',
+    timestamp: new Date(NOW - (n * 19 + 1) * 40 * MIN).toISOString(),
+    details: { email: user.email },
+  }))
+
+  return {
+    ...user,
+    blockedByEmail: user.blockedAt ? emailFor(REQUESTERS[0]) : null,
+    targetCount: new Set(theirs.map((s) => s.target)).size,
+    firstScanAt,
+    activity: activity.sort((a, b) => (a.timestamp! < b.timestamp! ? 1 : -1)),
+    signIns,
+  }
+}
+
+export function setAdminUserBlocked(id: string, blocked: boolean): AdminUser | undefined {
+  const user = adminUsers().find((u) => u.id === id)
+  if (!user) return undefined
+  if (blocked) blockedAtById.set(id, new Date().toISOString())
+  else blockedAtById.delete(id)
+  return { ...user, blockedAt: blockedAtById.get(id) ?? null }
 }

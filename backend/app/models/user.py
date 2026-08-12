@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, String
+from sqlalchemy import DateTime, ForeignKey, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -26,3 +26,17 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
+    # Set from the ID token's `iat` rather than the wall clock, so it marks when
+    # Google issued the credential, not when some later request happened to use
+    # it. Comparing the two is what makes sign-in logging idempotent.
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Blocking is the one piece of user state this app owns: identity is
+    # Google's and role is IAM's, but neither knows about this application.
+    blocked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    blocked_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+    )
+
+    @property
+    def is_blocked(self) -> bool:
+        return self.blocked_at is not None
