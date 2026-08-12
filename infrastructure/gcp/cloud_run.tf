@@ -16,8 +16,7 @@ resource "google_cloud_run_v2_service" "backend" {
     max_instance_request_concurrency = 80
 
     scaling {
-      # Scales to zero: no requests, no charge. Cap keeps a runaway loop cheap.
-      min_instance_count = 0
+      min_instance_count = 1
       max_instance_count = var.max_backend_instances
     }
 
