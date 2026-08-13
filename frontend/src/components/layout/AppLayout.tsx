@@ -37,7 +37,7 @@ type NavItems = NonNullable<MenuProps['items']>
 
 const NAV_ITEMS: NavItems = [
   { key: '/', icon: <DashboardOutlined />, label: 'Overview' },
-  { key: '/scans', icon: <RadarChartOutlined />, label: 'Scans' },
+  { key: '/scans', icon: <RadarChartOutlined />, label: 'My Scans' },
   { key: '/scans/new', icon: <PlusOutlined />, label: 'New Scan' },
   { key: '/settings', icon: <SettingOutlined />, label: 'Settings' },
 ]
