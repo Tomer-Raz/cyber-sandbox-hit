@@ -1,7 +1,19 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { DownloadOutlined, FilePdfOutlined } from '@ant-design/icons'
-import { Button, Card, Col, Flex, Progress, Row, Space, Statistic, Timeline, Typography } from 'antd'
+import {
+  Alert,
+  Button,
+  Card,
+  Col,
+  Flex,
+  Progress,
+  Row,
+  Space,
+  Statistic,
+  Timeline,
+  Typography,
+} from 'antd'
 import { api } from '@/api'
 import { toast } from '@/lib/notify'
 import { EVENT_LEVEL_META, SCAN_TYPE_META } from '@/lib/constants'
@@ -44,7 +56,7 @@ export default function Report() {
 
   if (!report) return <Card loading />
 
-  const { scan, findings, ai, findingsByCategory, events } = report
+  const { scan, findings, ai, anomaly, findingsByCategory, events } = report
 
   if (scan.status !== 'completed') {
     return (
@@ -108,6 +120,17 @@ export default function Report() {
           </>
         }
       />
+
+      {anomaly.evaluated && anomaly.isAnomaly && (
+        <Alert
+          type="warning"
+          showIcon
+          message="Anomalous scan detected"
+          description={`This scan deviates from ${anomaly.sampleSize} prior completed scans of this target (score ${anomaly.score.toFixed(1)}σ). Most unusual: ${
+            [...anomaly.features].sort((a, b) => Math.abs(b.zScore) - Math.abs(a.zScore))[0]?.name ?? 'n/a'
+          }.`}
+        />
+      )}
 
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={8}>

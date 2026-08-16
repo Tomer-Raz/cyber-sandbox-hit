@@ -3,6 +3,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from app.schemas.anomaly import AnomalyOut
 from app.schemas.scan import ScanEvent, SeverityCounts
 
 
@@ -51,3 +52,4 @@ class ScanReport(BaseModel):
     risk_score: float = 0.0
     events: list[ScanEvent] = Field(default_factory=list)
     ai: ReportAiInsight = Field(default_factory=ReportAiInsight)
+    anomaly: AnomalyOut = Field(default_factory=AnomalyOut)

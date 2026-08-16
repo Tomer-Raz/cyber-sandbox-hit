@@ -4,6 +4,8 @@ import type {
   AdminUser,
   AdminUserDetail,
   AiInsight,
+  Anomaly,
+  AnomalyFeature,
   DashboardStats,
   Finding,
   PhaseKey,
@@ -313,6 +315,50 @@ function buildInsight(scan: Scan, findings: Finding[]): AiInsight {
   }
 }
 
+const ANOMALY_MIN_SAMPLE_SIZE = 5
+const ANOMALY_Z_SCORE_THRESHOLD = 3.0
+
+/** Mirrors backend/app/services/anomaly_service.py's leave-one-out z-score. */
+function buildAnomaly(rec: ScanRecord, scan: Scan): Anomaly {
+  const history = records
+    .filter((r) => r.id !== rec.id && r.target === rec.target && r.baseStatus === 'completed')
+    .map(projectScan)
+
+  if (history.length < ANOMALY_MIN_SAMPLE_SIZE) {
+    return {
+      evaluated: false,
+      isAnomaly: false,
+      score: 0,
+      sampleSize: history.length,
+      reason: 'insufficient_history',
+      features: [],
+    }
+  }
+
+  const feature = (name: string, value: number, values: number[]): AnomalyFeature => {
+    const mean = values.reduce((a, b) => a + b, 0) / values.length
+    const variance = values.reduce((a, b) => a + (b - mean) ** 2, 0) / (values.length - 1)
+    const stdev = Math.sqrt(variance)
+    return { name, value, mean, stdev, zScore: stdev === 0 ? 0 : (value - mean) / stdev }
+  }
+
+  const features = [
+    feature('total_findings', scan.totalFindings, history.map((s) => s.totalFindings)),
+    feature('risk_score', scan.riskScore, history.map((s) => s.riskScore)),
+    feature('duration_seconds', scan.durationSec ?? 0, history.map((s) => s.durationSec ?? 0)),
+  ]
+
+  const score = Math.max(...features.map((f) => Math.abs(f.zScore)))
+  return {
+    evaluated: true,
+    isAnomaly: score >= ANOMALY_Z_SCORE_THRESHOLD,
+    score,
+    sampleSize: history.length,
+    reason: '',
+    features,
+  }
+}
+
 function buildReport(rec: ScanRecord): ScanReport {
   const scan = projectScan(rec)
   const findings = buildFindings(rec)
@@ -321,6 +367,7 @@ function buildReport(rec: ScanRecord): ScanReport {
     findings,
     events: buildEvents(rec, currentFraction(rec)),
     ai: buildInsight(scan, findings),
+    anomaly: buildAnomaly(rec, scan),
     findingsByCategory: groupByCategory(findings),
   }
 }

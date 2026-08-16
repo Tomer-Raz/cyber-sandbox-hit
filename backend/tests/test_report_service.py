@@ -6,8 +6,9 @@ import pytest
 from app.models.scan import Scan
 from app.models.scan_config import ScanConfig
 from app.models.target import Target
+from app.schemas.anomaly import AnomalyOut
 from app.schemas.report import ReportFinding, ScanReport
-from app.services import log_service, report_service
+from app.services import anomaly_service, log_service, report_service
 from tests.conftest import FakeFirestoreClient, FakeResult, FakeSession
 
 
@@ -85,7 +86,11 @@ async def test_build_scan_report_combines_db_and_firestore(monkeypatch):
         assert sid == str(scan_id)
         return [ReportFinding(**_ai_result_doc())]
 
+    async def fake_assess_scan(_scan, _target, _db, **_kwargs):
+        return AnomalyOut(evaluated=True, is_anomaly=False, score=0.4, sample_size=6)
+
     monkeypatch.setattr(report_service, "get_scan_findings", fake_get_scan_findings)
+    monkeypatch.setattr(anomaly_service, "assess_scan", fake_assess_scan)
 
     report = await report_service.build_scan_report(scan_id, _user(), session)
 
@@ -93,6 +98,8 @@ async def test_build_scan_report_combines_db_and_firestore(monkeypatch):
     assert report.target_url == "https://target.example"
     assert report.scan_type == "full"
     assert len(report.findings) == 1
+    assert report.anomaly.evaluated is True
+    assert report.anomaly.sample_size == 6
 
 
 @pytest.mark.asyncio

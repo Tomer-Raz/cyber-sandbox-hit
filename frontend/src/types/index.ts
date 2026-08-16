@@ -89,6 +89,23 @@ export interface AiInsight {
   model: string
 }
 
+export interface AnomalyFeature {
+  name: string
+  value: number
+  mean: number
+  stdev: number
+  zScore: number
+}
+
+export interface Anomaly {
+  evaluated: boolean
+  isAnomaly: boolean
+  score: number
+  sampleSize: number
+  reason: string
+  features: AnomalyFeature[]
+}
+
 export interface CategoryCount {
   category: string
   count: number
@@ -99,6 +116,7 @@ export interface ScanReport {
   findings: Finding[]
   events: ScanEvent[]
   ai: AiInsight
+  anomaly: Anomaly
   findingsByCategory: CategoryCount[]
 }
 

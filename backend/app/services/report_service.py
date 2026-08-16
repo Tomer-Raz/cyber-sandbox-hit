@@ -12,7 +12,7 @@ from app.models.scan_config import ScanConfig
 from app.models.user import User
 from app.schemas.report import ReportAiInsight, ReportFinding, ScanReport
 from app.schemas.scan import ScanEvent, SeverityCounts
-from app.services import finding_stats_service, log_service
+from app.services import anomaly_service, finding_stats_service, log_service
 from app.services.scan_access import get_readable_scan
 
 _AI_RESULTS_COLLECTION = "ai_results"
@@ -69,6 +69,9 @@ async def build_scan_report(scan_id: uuid.UUID, user: User, db: AsyncSession) ->
     for finding in findings:
         counts[finding_stats_service.normalise_severity(finding.severity)] += 1
 
+    total_findings = len(findings)
+    risk = finding_stats_service.risk_score(counts)
+
     return ScanReport(
         scan_id=scan.id,
         status=scan.status,
@@ -79,10 +82,17 @@ async def build_scan_report(scan_id: uuid.UUID, user: User, db: AsyncSession) ->
         finished_at=scan.finished_at,
         findings=findings,
         counts=SeverityCounts(**counts),
-        total_findings=len(findings),
-        risk_score=finding_stats_service.risk_score(counts),
+        total_findings=total_findings,
+        risk_score=risk,
         events=await scan_events(scan),
         ai=_ai_insight(findings, counts),
+        anomaly=await anomaly_service.assess_scan(
+            scan,
+            target,
+            db,
+            current_total_findings=total_findings,
+            current_risk_score=risk,
+        ),
     )
 
 

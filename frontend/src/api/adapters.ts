@@ -7,6 +7,8 @@ import type {
   AdminUser,
   AdminUserDetail,
   AiInsight,
+  Anomaly,
+  AnomalyFeature,
   Confidence,
   Finding,
   PhaseKey,
@@ -80,6 +82,14 @@ export interface ApiScanReport {
     top_risks: string[]
     confidence: number
     model: string
+  }
+  anomaly: {
+    evaluated: boolean
+    is_anomaly: boolean
+    score: number
+    sample_size: number
+    reason: string
+    features: Array<{ name: string; value: number; mean: number; stdev: number; z_score: number }>
   }
 }
 
@@ -257,6 +267,23 @@ export function toScanReport(dto: ApiScanReport): ScanReport {
     model: dto.ai.model,
   }
 
+  const anomaly: Anomaly = {
+    evaluated: dto.anomaly.evaluated,
+    isAnomaly: dto.anomaly.is_anomaly,
+    score: dto.anomaly.score,
+    sampleSize: dto.anomaly.sample_size,
+    reason: dto.anomaly.reason,
+    features: dto.anomaly.features.map(
+      (f): AnomalyFeature => ({
+        name: f.name,
+        value: f.value,
+        mean: f.mean,
+        stdev: f.stdev,
+        zScore: f.z_score,
+      }),
+    ),
+  }
+
   return {
     scan: toScan({
       ...dto,
@@ -268,6 +295,7 @@ export function toScanReport(dto: ApiScanReport): ScanReport {
     findings,
     events: dto.events.map(toScanEvent),
     ai,
+    anomaly,
     findingsByCategory: groupByCategory(findings),
   }
 }
