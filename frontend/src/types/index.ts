@@ -46,6 +46,7 @@ export interface Scan {
   requestedBy: string
   authorized: boolean
   region: string
+  isAnomaly: boolean
 }
 
 export interface ReferenceLink {

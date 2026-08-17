@@ -137,3 +137,54 @@ async def test_assess_scan_evaluates_with_enough_history(monkeypatch):
     )
     assert result.evaluated is True
     assert result.sample_size == 5
+
+
+def _completed_scan(started_at, finished_at):
+    return make(
+        Scan,
+        config_id=uuid.uuid4(),
+        status="completed",
+        started_at=started_at,
+        finished_at=finished_at,
+    )
+
+
+def test_bulk_is_anomaly_flags_only_the_outlier_scan():
+    target = make(Target, user_id=uuid.uuid4())
+    now = datetime.now(timezone.utc)
+    normal = [_completed_scan(now, now + timedelta(seconds=58 + i)) for i in range(5)]
+    outlier = _completed_scan(now, now + timedelta(seconds=6000))
+
+    counts_by_scan = {str(s.id): {**finding_stats_service.empty_counts(), "medium": 2} for s in normal}
+    counts_by_scan[str(outlier.id)] = {**finding_stats_service.empty_counts(), "medium": 2}
+
+    flags = anomaly_service.bulk_is_anomaly(
+        [(s, target) for s in normal] + [(outlier, target)], counts_by_scan
+    )
+    assert all(flags[s.id] is False for s in normal)
+    assert flags[outlier.id] is True
+
+
+def test_bulk_is_anomaly_ignores_non_completed_scans():
+    target = make(Target, user_id=uuid.uuid4())
+    now = datetime.now(timezone.utc)
+    running = make(Scan, config_id=uuid.uuid4(), status="running", started_at=now, finished_at=None)
+    flags = anomaly_service.bulk_is_anomaly([(running, target)], {})
+    assert running.id not in flags
+
+
+def test_bulk_is_anomaly_scopes_history_per_target():
+    target_a = make(Target, user_id=uuid.uuid4())
+    target_b = make(Target, user_id=uuid.uuid4())
+    now = datetime.now(timezone.utc)
+    # Only 2 completed scans for target_b -> below MIN_SAMPLE_SIZE, must abstain (False).
+    a_scans = [_completed_scan(now, now + timedelta(seconds=58 + i)) for i in range(5)]
+    b_scans = [_completed_scan(now, now + timedelta(seconds=100 + i)) for i in range(2)]
+
+    counts_by_scan = {
+        str(s.id): {**finding_stats_service.empty_counts(), "medium": 2} for s in a_scans + b_scans
+    }
+    flags = anomaly_service.bulk_is_anomaly(
+        [(s, target_a) for s in a_scans] + [(s, target_b) for s in b_scans], counts_by_scan
+    )
+    assert all(flags[s.id] is False for s in b_scans)

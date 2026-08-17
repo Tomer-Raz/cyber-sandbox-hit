@@ -183,7 +183,9 @@ function currentFraction(rec: ScanRecord): number {
   return clamp((Date.now() - started) / rec.simDurationMs, 0, 1)
 }
 
-function projectScan(rec: ScanRecord): Scan {
+// Anomaly-free projection, used as the history basis for `buildAnomaly` so
+// computing one scan's anomaly flag never recurses into its neighbours'.
+function projectScanBase(rec: ScanRecord): Scan {
   const frozen = FROZEN[rec.baseStatus]
   const started = rec.startedAt ?? rec.createdAt
   // Derived from the clock even when baseStatus is already 'completed', so a
@@ -219,7 +221,14 @@ function projectScan(rec: ScanRecord): Scan {
     requestedBy: rec.requestedBy,
     authorized: rec.authorized,
     region: rec.region,
+    isAnomaly: false,
   }
+}
+
+function projectScan(rec: ScanRecord): Scan {
+  const base = projectScanBase(rec)
+  if (base.status !== 'completed') return base
+  return { ...base, isAnomaly: buildAnomaly(rec, base).isAnomaly }
 }
 
 interface EventTpl {
@@ -322,7 +331,7 @@ const ANOMALY_Z_SCORE_THRESHOLD = 3.0
 function buildAnomaly(rec: ScanRecord, scan: Scan): Anomaly {
   const history = records
     .filter((r) => r.id !== rec.id && r.target === rec.target && r.baseStatus === 'completed')
-    .map(projectScan)
+    .map(projectScanBase)
 
   if (history.length < ANOMALY_MIN_SAMPLE_SIZE) {
     return {

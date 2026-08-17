@@ -37,6 +37,7 @@ export interface ApiScan {
   counts: SeverityCounts
   total_findings: number
   risk_score: number
+  is_anomaly: boolean
 }
 
 export interface ApiScanEvent {
@@ -219,6 +220,7 @@ export function toScan(dto: ApiScan): Scan {
     requestedBy: '',
     authorized: true,
     region: dto.region,
+    isAnomaly: dto.is_anomaly,
   }
 }
 
@@ -291,6 +293,7 @@ export function toScanReport(dto: ApiScanReport): ScanReport {
       config_id: '',
       error_message: null,
       region: '',
+      is_anomaly: dto.anomaly.is_anomaly,
     }),
     findings,
     events: dto.events.map(toScanEvent),

@@ -41,6 +41,7 @@ class ScanOut(BaseModel):
     counts: SeverityCounts = Field(default_factory=SeverityCounts)
     total_findings: int = 0
     risk_score: float = 0.0
+    is_anomaly: bool = False
 
 
 class ScanEvent(BaseModel):

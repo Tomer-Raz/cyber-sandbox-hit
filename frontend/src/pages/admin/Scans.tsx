@@ -16,6 +16,7 @@ const COLUMNS = scanColumns<AdminScan>([
   'name',
   'requestedBy',
   'status',
+  'anomaly',
   'scanType',
   'startedAt',
   'durationSec',

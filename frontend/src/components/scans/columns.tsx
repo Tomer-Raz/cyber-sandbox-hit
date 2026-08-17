@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
-import { Tag } from 'antd'
+import { Tag, Tooltip } from 'antd'
+import { WarningOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import { SCAN_TYPE_META, SEVERITY_META, STATUS_META } from '@/lib/constants'
 import { formatDateTime, formatDuration, formatRelativeTime, riskBand } from '@/lib/format'
@@ -23,6 +24,22 @@ const REGISTRY = {
     dataIndex: 'status',
     width: 130,
     render: (_, s) => <Tag color={STATUS_META[s.status].color}>{STATUS_META[s.status].label}</Tag>,
+  },
+  anomaly: {
+    title: 'Anomaly',
+    dataIndex: 'isAnomaly',
+    width: 90,
+    align: 'center',
+    responsive: ['md'],
+    render: (_, s) =>
+      s.isAnomaly ? (
+        <Tooltip
+          title="This scan looks very different from past scans of this target (findings, risk, or duration). Open the report for details."
+          styles={{ body: { fontSize: 12, maxWidth: 320 } }}
+        >
+          <WarningOutlined style={{ color: '#faad14', fontSize: 16 }} />
+        </Tooltip>
+      ) : null,
   },
   scanType: {
     title: 'Type',

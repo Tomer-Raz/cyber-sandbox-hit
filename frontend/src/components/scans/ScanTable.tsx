@@ -5,6 +5,7 @@ import { scanColumns } from './columns'
 const COLUMNS = scanColumns<Scan>([
   'name',
   'status',
+  'anomaly',
   'scanType',
   'totalFindings',
   'riskScore',

@@ -73,6 +73,18 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
           triggerBg: t.colorBgContainer,
           triggerColor: t.colorText,
         },
+        // Tooltip defaults to a dark bubble with light text regardless of
+        // algorithm (it assumes a light page behind it) — in light mode that
+        // reads as white-on-dark, the opposite of the surrounding UI. Flip it
+        // to match the resolved theme; dark mode's default is already correct.
+        ...(resolved === 'light'
+          ? {
+              Tooltip: {
+                colorBgSpotlight: t.colorBgElevated,
+                colorTextLightSolid: t.colorText,
+              },
+            }
+          : {}),
       },
     }
   }, [resolved])

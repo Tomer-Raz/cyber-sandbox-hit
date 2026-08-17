@@ -1,4 +1,5 @@
 import statistics
+import uuid
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -108,3 +109,36 @@ async def assess_scan(
         current_features["duration_seconds"] = (scan.finished_at - scan.started_at).total_seconds()
 
     return assess(current_features, history_features)
+
+
+def bulk_is_anomaly(
+    scans_and_targets: list[tuple[Scan, Target]], counts_by_scan: dict[str, dict[str, int]]
+) -> dict[uuid.UUID, bool]:
+    """Same leave-one-out z-score as `assess`, batched for a scan list.
+
+    Unlike `assess_scan`, takes no DB session: `scans_and_targets` must already
+    include every completed scan for every target being evaluated (true for
+    both the owned-scans and admin-scans listings, which are unpaginated), so
+    grouping happens in memory instead of one query per scan.
+    """
+    completed = [(s, t) for s, t in scans_and_targets if s.status == "completed"]
+    by_target: dict[uuid.UUID, list[Scan]] = {}
+    for scan, target in completed:
+        by_target.setdefault(target.id, []).append(scan)
+
+    features: dict[uuid.UUID, dict[str, float]] = {}
+    for scan, _target in completed:
+        filled = {**finding_stats_service.empty_counts(), **counts_by_scan.get(str(scan.id), {})}
+        row: dict[str, float] = {
+            "total_findings": float(sum(filled.values())),
+            "risk_score": finding_stats_service.risk_score(filled),
+        }
+        if scan.started_at and scan.finished_at:
+            row["duration_seconds"] = (scan.finished_at - scan.started_at).total_seconds()
+        features[scan.id] = row
+
+    flags: dict[uuid.UUID, bool] = {}
+    for scan, target in completed:
+        history = [features[s.id] for s in by_target[target.id] if s.id != scan.id]
+        flags[scan.id] = assess(features[scan.id], history).is_anomaly
+    return flags
