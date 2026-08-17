@@ -1,159 +1,89 @@
 # Sandbox Playground Cyber Platform
 
-A cloud-native, AI-driven cybersecurity platform for automated penetration testing, built on Google Cloud Platform.
-
-> **Architecture:** full system & sequence diagrams in [`architecture.md`](architecture.md) (Mermaid, renders on GitHub); editable source in [`project_architecture.drawio`](project_architecture.drawio).
+A cloud-native, AI-assisted platform for automated penetration testing, built on Google Cloud Platform.
 
 ## Overview
 
-The Sandbox Playground Cyber Platform enables registered users to define target servers and orchestrate automated penetration testing through an intuitive web interface. The system dynamically provisions ephemeral Linux containers for scanning, leverages Vertex AI for intelligent vulnerability matching, and employs Vertex AI pipelines for anomaly detection.
+Registered users log in with Google, add a target, and launch a scan. The backend spins up a short-lived Cloud Run Job that runs OWASP ZAP against the target, sends the findings to Vertex AI (Gemini) for CVE/CVSS enrichment, re-confirms a sample of findings with safe follow-up requests, and flags unusual scans with a statistical anomaly check. Results are viewable in the dashboard and exportable as signed JSON or PDF reports.
 
-> **Academic Project** — Developed as part of bachelor's studies at HIT (Holon Institute of Technology).
+> **Academic Project** — Developed as part of bachelor's studies at HIT
+
+## How It Works
+
+1. **Sign in** — Google OAuth; the backend verifies the Google ID token on every request
+2. **Add a target** — URL is validated (auto-completes `http(s)://`, blocked from pointing at internal/private addresses)
+3. **Scan** — A Cloud Run Job runs OWASP ZAP (spider + passive/active scan) against the target, then shuts down
+4. **Enrich** — Findings are sent to Vertex AI (Gemini 2.5 Flash) for CVE IDs, CVSS scores, and remediation summaries
+5. **Re-confirm** — Flagged findings get a safe follow-up request to check the vulnerable evidence is still present; sensitive payloads are encrypted (AES-256-GCM) at rest
+6. **Detect anomalies** — Each scan's findings count, risk score, and duration are compared (z-score) against that target's scan history to flag outliers
+7. **Report** — View results in the dashboard, or export a cryptographically signed JSON/PDF report
+
+## Features
+
+- **Google OAuth login** — no local passwords
+- **Target management** — add/remove scan targets with SSRF-safe URL validation
+- **Scan dashboard** — live status, findings summary, 7-day trend, severity breakdown
+- **AI-enriched findings** — CVE/CVSS matching and remediation guidance via Vertex AI
+- **Anomaly detection** — statistical (z-score) flagging of unusual scans, no ML pipeline required
+- **Signed report export** — JSON and PDF, both signed so tampering can be detected
+- **Admin panel** — view/manage all users and scans, block/unblock users, per-user activity history
+- **Dark / light / system theme**
+- **Rate limiting** — per-user/IP request throttling on the API
 
 ## Architecture
 
 ```
 ┌─────────────┐     ┌──────────────┐     ┌─────────────────────────┐
-│  React SPA  │────▶│  FastAPI     │────▶│  Cloud Run Jobs         │
-│  (Google    │◀────│  (Cloud Run) │◀────│  (ephemeral Linux)      │
-│   OAuth)    │     └──────┬───────┘     │  ┌───────┐ ┌─────────┐ │
-└─────────────┘            │             │  │OWASP  │ │ Exploit │ │
-                    ┌──────┴───────┐     │  │ ZAP   │ │ Scripts │ │
-                    │  Cloud SQL   │     │  └───────┘ └─────────┘ │
-                    │  (Users &    │     └─────────────────────────┘
-                    │   Configs)   │                │
-                    └──────────────┘                ▼
-                                        ┌─────────────────────┐
-                    ┌───────────────┐   │  Vertex AI          │
-                    │  Firestore    │◀──│  (CVE Matching)     │
-                    │  (Logs &      │   └─────────────────────┘
-                    │   Telemetry)  │
-                    └───────┬───────┘   ┌─────────────────────┐
-                            │           │  Vertex AI          │
-                            └──────────▶│  (Anomaly Detection)│
-                                        └─────────────────────┘
-                    ┌───────────────┐
-                    │  Chronicle    │◀── Firestore + Cloud Identity logs
-                    │  (SecOps SIEM)│
-                    └───────────────┘
+│  React SPA  │────▶│  FastAPI     │────▶│  Cloud Run Job          │
+│  (Google    │◀────│  (Cloud Run) │◀────│  (ephemeral, OWASP ZAP) │
+│   OAuth)    │     └──────┬───────┘     └────────────┬────────────┘
+└─────────────┘            │                           │
+                    ┌──────┴───────┐                   ▼
+                    │  Cloud SQL   │        ┌─────────────────────┐
+                    │  (users,     │        │  Vertex AI          │
+                    │   targets,   │        │  (Gemini – CVE/CVSS │
+                    │   scans)     │        │   enrichment)       │
+                    └──────────────┘        └─────────────────────┘
+                    ┌──────────────┐
+                    │  Firestore   │◀── scan logs, AI results,
+                    │              │    exploit checks, audit log
+                    └──────────────┘
 ```
 
-## Flow Steps
-
-1. Authenticate via Google OAuth
-2. Send scan request (REST)
-3. Save config to Cloud SQL
-4. Provision Cloud Run Job
-5. DAST scan & exploit target
-6. Send results to Vertex AI
-7. Trigger exploit validation
-8. Write logs to Firestore
-9. Feed ML anomaly pipeline
-10. Ingest events to Chronicle
-11. Return reports to dashboard
-
-## How It Works
-
-1. **Authenticate** — Log in via Google OAuth
-2. **Configure** — Define target IP/domain and scan parameters
-3. **Scan** — FastAPI provisions an ephemeral Cloud Run Job with OWASP ZAP
-4. **Analyze** — ZAP results are sent to Vertex AI for CVE template matching
-5. **Exploit** — Matched vulnerabilities are validated with custom Python payloads
-6. **Report** — Logs flow to Firestore; Vertex AI detects anomalies; Chronicle provides SIEM
-
-Containers are destroyed immediately after each scan to minimize compute costs.
+Anomaly detection and PDF/JSON report signing run inside the FastAPI backend — no separate ML service is involved.
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | React, Google OAuth 2.0 |
-| Backend | Python, FastAPI, SQLAlchemy |
-| Scanning | OWASP ZAP, Custom Python exploits |
-| Containers | Cloud Run Jobs, Artifact Registry |
-| AI/ML | Vertex AI (Gemini LLM), Vertex AI Pipelines (Scikit-Learn/PyTorch) |
-| Databases | Cloud SQL for PostgreSQL, Firestore (Serverless) |
-| Monitoring | Chronicle (Google Security Operations) |
+| Frontend | React, Ant Design, Recharts, Google OAuth 2.0 |
+| Backend | Python, FastAPI, SQLAlchemy (async), slowapi (rate limiting) |
+| Scanning | OWASP ZAP, run as a Cloud Run Job |
+| AI | Vertex AI (Gemini 2.5 Flash) for CVE/CVSS enrichment |
+| Databases | Cloud SQL for PostgreSQL, Firestore |
+| Reports | fpdf2 (PDF), RSA-signed JSON/PDF exports |
+| Security | AES-256-GCM (evidence encryption), Trivy, Gitleaks, Checkov (CI scanning) |
 | CI/CD | GitHub Actions |
 
 ## Project Structure
 
 ```
 cyber-sandbox-hit/
-├── frontend/              # React SPA
-├── backend/               # FastAPI application
-├── scanner/               # OWASP ZAP container + exploit scripts
-├── ml/                    # Vertex AI anomaly detection pipeline
-├── infra/                 # GCP infrastructure (Terraform)
-└── .github/workflows/     # GitHub Actions CI/CD
-```
-
-## Getting Started
-
-### Prerequisites
-
-- Python 3.11+
-- Node.js 18+
-- A GCP project with the following APIs/services enabled:
-  - Cloud Run & Artifact Registry
-  - Cloud SQL for PostgreSQL
-  - Firestore (Native mode)
-  - Vertex AI
-  - Chronicle / Google Security Operations
-  - Cloud Identity (OAuth 2.0 client)
-  - Secret Manager
-
-### Setup
-
-```bash
-# Clone the repository
-git clone https://github.com/<org>/cyber-sandbox-hit.git
-cd cyber-sandbox-hit
-
-# Backend
-cd backend
-python -m venv venv
-source venv/bin/activate  # or venv\Scripts\activate on Windows
-pip install -r requirements.txt
-uvicorn app.main:app --reload
-
-# Frontend
-cd ../frontend
-npm install
-npm run dev
-```
-
-### Environment Variables
-
-Configure the following (use Secret Manager in production):
-
-```
-DATABASE_URL=
-CLOUD_SQL_CONNECTION_NAME=
-FIRESTORE_PROJECT_ID=
-ARTIFACT_REGISTRY_REPO=
-VERTEX_AI_LOCATION=
-VERTEX_AI_MODEL=
-GCP_PROJECT_ID=
-GCP_REGION=
-GOOGLE_OAUTH_CLIENT_ID=
+├── frontend/                  # React SPA (dashboard, scans, reports, admin)
+├── backend/                   # FastAPI app + scanner worker (Dockerfile.scanner)
+├── infrastructure/gcp/        # GCP infrastructure (Terraform)
+└── .github/workflows/         # CI/CD: deploy backend/frontend/scanner, security scans
 ```
 
 ## CI/CD
 
-GitHub Actions automatically:
-1. Build and test the FastAPI backend
-2. Build the scanner Docker image (Linux)
-3. Push the image to Artifact Registry
-4. Deploy the backend to Cloud Run
+GitHub Actions runs on every push/PR:
+- **deploy-backend / deploy-frontend / deploy-scanner** — test, build Docker images, push to Artifact Registry, deploy to Cloud Run / Cloud Run Jobs
+- **security** — Gitleaks (secret scanning), Checkov (Terraform/Dockerfile scanning), Trivy (filesystem vulnerability scanning)
 
 ## Ethical Use
 
-This platform is designed for **authorized security testing only**. All scan targets must be explicitly approved. Unauthorized use against systems you do not own or have permission to test is prohibited.
-
-## Team
-
-Developed by students at HIT (Holon Institute of Technology) as a bachelor's degree project.
+This platform is designed for **authorized security testing only**. All scan targets must be explicitly approved.
 
 ## License
 
