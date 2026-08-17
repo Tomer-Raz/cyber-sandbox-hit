@@ -18,6 +18,7 @@ import { api } from '@/api'
 import { toast } from '@/lib/notify'
 import { EVENT_LEVEL_META, SCAN_TYPE_META } from '@/lib/constants'
 import { formatDateTime, riskBand } from '@/lib/format'
+import { buildReportPdf } from '@/lib/pdfReport'
 import { useSeverityHex } from '@/theme/palette'
 import type { ScanReport } from '@/types'
 import { FindingsByCategoryBar } from '@/components/charts/FindingsByCategoryBar'
@@ -84,8 +85,9 @@ export default function Report() {
   }
 
   const exportPdf = () => {
-    toast.info('Preparing PDF', 'Use your browser print dialog to save as PDF.')
-    setTimeout(() => window.print(), 350)
+    const url = buildReportPdf(report).output('bloburl') as unknown as string
+    window.open(url, '_blank', 'noopener,noreferrer')
+    toast.success('Report opened as PDF')
   }
 
   const breakdown = [
