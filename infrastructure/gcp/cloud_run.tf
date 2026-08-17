@@ -151,14 +151,16 @@ resource "google_cloud_run_v2_service" "backend" {
   }
 
   lifecycle {
-    # CI/CD owns the image tag after the first apply.
     ignore_changes = [
       template[0].containers[0].image,
+      template[0].labels,
       client,
       client_version,
       # API echoes back a zeroed service-level scaling block we never set,
       # which would otherwise show as a permanent no-op diff.
       scaling,
+      terraform_labels,
+      effective_labels,
     ]
   }
 
@@ -213,11 +215,14 @@ resource "google_cloud_run_v2_service" "frontend" {
   lifecycle {
     ignore_changes = [
       template[0].containers[0].image,
+      template[0].labels,
       client,
       client_version,
       # API echoes back a zeroed service-level scaling block we never set,
       # which would otherwise show as a permanent no-op diff.
       scaling,
+      terraform_labels,
+      effective_labels,
     ]
   }
 

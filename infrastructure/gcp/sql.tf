@@ -8,16 +8,13 @@ resource "google_sql_database_instance" "main" {
   settings {
     tier = var.db_tier
 
-    # ZONAL is half the price of REGIONAL; only prod pays for HA.
     availability_type = var.environment == "prod" ? "REGIONAL" : "ZONAL"
 
-    # HDD is ~4x cheaper per GB than SSD and fine for this workload size.
     disk_size       = var.db_disk_size
     disk_type       = var.db_disk_type
     disk_autoresize = false # a runaway autoresize can only ever cost money
 
-    # NEVER keeps the instance stopped — you pay storage only (~$1/month) and
-    # start it from the console when you actually need the DB.
+    # Never keeps the instance stopped 
     activation_policy = var.db_activation_policy
 
     ip_configuration {
@@ -77,6 +74,10 @@ resource "google_sql_user" "app" {
   name     = var.db_user
   instance = google_sql_database_instance.main.name
   password = random_password.db.result
+
+  lifecycle {
+    ignore_changes = [password]
+  }
 }
 
 # IAM-based login for the backend SA — no password on the hot path.

@@ -15,11 +15,19 @@ resource "google_secret_manager_secret" "db_password" {
   }
 
   depends_on = [google_project_service.services]
+
+  lifecycle {
+    ignore_changes = [terraform_labels]
+  }
 }
 
 resource "google_secret_manager_secret_version" "db_password" {
   secret      = google_secret_manager_secret.db_password.id
   secret_data = random_password.db.result
+
+  lifecycle {
+    ignore_changes = [secret_data]
+  }
 }
 
 # Value is filled in by hand after creating the OAuth client in the console:
@@ -32,6 +40,10 @@ resource "google_secret_manager_secret" "oauth_client_secret" {
   }
 
   depends_on = [google_project_service.services]
+
+  lifecycle {
+    ignore_changes = [terraform_labels]
+  }
 }
 
 # Signing key for the session JWTs the backend issues after Google ID-token
@@ -49,11 +61,19 @@ resource "google_secret_manager_secret" "jwt_signing_key" {
   }
 
   depends_on = [google_project_service.services]
+
+  lifecycle {
+    ignore_changes = [terraform_labels]
+  }
 }
 
 resource "google_secret_manager_secret_version" "jwt_signing_key" {
   secret      = google_secret_manager_secret.jwt_signing_key.id
   secret_data = random_password.jwt_signing_key.result
+
+  lifecycle {
+    ignore_changes = [secret_data]
+  }
 }
 
 # ── Access ───────────────────────────────────────────────────────────────────

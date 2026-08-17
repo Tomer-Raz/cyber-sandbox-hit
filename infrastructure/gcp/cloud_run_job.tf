@@ -65,8 +65,11 @@ resource "google_cloud_run_v2_job" "scanner" {
   lifecycle {
     ignore_changes = [
       template[0].template[0].containers[0].image,
+      template[0].labels,
       client,
       client_version,
+      terraform_labels,
+      effective_labels,
     ]
   }
 

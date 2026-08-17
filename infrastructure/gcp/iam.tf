@@ -81,7 +81,7 @@ resource "google_service_account_iam_member" "backend_uses_scanner_sa" {
 resource "google_project_iam_custom_role" "iam_policy_reader" {
   role_id     = "iamPolicyReader"
   title       = "Cyber Sandbox IAM Policy Reader"
-  description = "Least-privilege read of the project IAM policy, so the backend can resolve which principals hold the appAdmin marker role."
+  description = "Least-privilege read of the project IAM policy, so the backend can resolve which principals hold the appAdmin marker role. Narrower than roles/browser, which also allows enumerating folders and other projects."
   permissions = ["resourcemanager.projects.getIamPolicy"]
 }
 
