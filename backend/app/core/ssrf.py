@@ -15,6 +15,12 @@ _WWW_PREFIX = "www."
 _MAX_REDIRECTS = 5
 _PROBE_TIMEOUT_SECONDS = 6.0
 
+# urlsplit drops tab/CR/LF before parsing, so a URL carrying them still yields a
+# clean hostname and passes every check below — but the string handed back is
+# the original one, and it goes on to be stored, passed to the scanner job as an
+# env var, and written into log lines. RFC 3986 has no place for these.
+_CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f]")
+
 
 class UnsafeTargetURLError(Exception):
     """Raised when a target URL resolves to a private, loopback, link-local,
@@ -126,6 +132,8 @@ async def validate_target_url(url: str) -> str:
     url = url.strip()
     if not url:
         raise UnsafeTargetURLError("No target URL given")
+    if _CONTROL_CHARACTERS.search(url):
+        raise UnsafeTargetURLError("URL contains control characters")
 
     typed_scheme = bool(_HAS_SCHEME.match(url))
     parsed = urlparse(url if typed_scheme else f"https://{url}")

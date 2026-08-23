@@ -14,9 +14,15 @@ import os
 import sys
 
 from app.core.config import shared_settings
+from app.core.logging_config import setup_logging
 from app.services import ai_service, exploit_service, log_service, zap_service
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+# The same structured logging the API uses, rather than a plain "%(message)s".
+# Not cosmetic: most of what this worker logs is a ZAP alert name, a target URL
+# or a ZAP error body — none of it ours — and a newline in any of those started
+# what Cloud Logging reads as a fresh entry. json.dumps keeps the whole message
+# in one escaped field, so a scanned site cannot forge log lines.
+setup_logging()
 logger = logging.getLogger("scanner_worker")
 
 

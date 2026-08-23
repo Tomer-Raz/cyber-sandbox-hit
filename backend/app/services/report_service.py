@@ -178,6 +178,32 @@ async def scan_events(scan: Scan) -> list[ScanEvent]:
     return sorted(events, key=lambda e: e.timestamp)
 
 
+# fpdf's built-in fonts encode to Latin-1 and raise on anything outside it.
+# Almost nothing rendered below is ours — model output, and URLs and alert names
+# echoed back from the scanned site — so an unsupported character used to make
+# the whole export fail with a 500. A curly apostrophe was enough, which is
+# routine Vertex AI punctuation rather than anything adversarial.
+_PDF_TRANSLITERATIONS = str.maketrans(
+    {
+        "‘": "'", "’": "'", "‛": "'",
+        "“": '"', "”": '"', "„": '"',
+        "–": "-", "—": "-", "−": "-",
+        "…": "...", "•": "-", " ": " ",
+    }
+)
+
+
+def _pdf_text(value: str) -> str:
+    """Folds text to what the built-in font can draw.
+
+    Punctuation the model reaches for is mapped to its ASCII equivalent so the
+    text stays readable; anything else outside Latin-1 becomes "?". That loses
+    non-Latin scripts, so the JSON export — which carries the exact bytes — is
+    the faithful one.
+    """
+    return value.translate(_PDF_TRANSLITERATIONS).encode("latin-1", "replace").decode("latin-1")
+
+
 def render_pdf(report: ScanReport) -> bytes:
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=15)
@@ -196,7 +222,7 @@ def render_pdf(report: ScanReport) -> bytes:
         ("Started", report.started_at.isoformat() if report.started_at else "-"),
         ("Finished", report.finished_at.isoformat() if report.finished_at else "-"),
     ]:
-        pdf.cell(0, 7, f"{label}: {value}", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 7, _pdf_text(f"{label}: {value}"), new_x="LMARGIN", new_y="NEXT")
 
     pdf.ln(4)
     pdf.set_font("Helvetica", "B", 13)
@@ -206,7 +232,11 @@ def render_pdf(report: ScanReport) -> bytes:
         pdf.ln(2)
         pdf.set_font("Helvetica", "B", 11)
         pdf.multi_cell(
-            0, 6, f"{finding.name}  [{finding.severity.upper()}]", new_x="LMARGIN", new_y="NEXT"
+            0,
+            6,
+            _pdf_text(f"{finding.name}  [{finding.severity.upper()}]"),
+            new_x="LMARGIN",
+            new_y="NEXT",
         )
         pdf.set_font("Helvetica", "", 10)
         cves = ", ".join(finding.cve_ids) if finding.cve_ids else "none"
@@ -216,6 +246,6 @@ def render_pdf(report: ScanReport) -> bytes:
             f"Summary: {finding.summary}",
             f"Remediation: {finding.remediation}",
         ]:
-            pdf.multi_cell(0, 5, line, new_x="LMARGIN", new_y="NEXT")
+            pdf.multi_cell(0, 5, _pdf_text(line), new_x="LMARGIN", new_y="NEXT")
 
     return bytes(pdf.output())
