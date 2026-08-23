@@ -98,9 +98,7 @@ def _to_scan_out(
     filled = {**finding_stats_service.empty_counts(), **counts}
     return ScanOut(
         id=scan.id,
-        config_id=scan.config_id,
         status=scan.status,
-        error_message=scan.error_message,
         created_at=scan.created_at,
         started_at=scan.started_at,
         finished_at=scan.finished_at,

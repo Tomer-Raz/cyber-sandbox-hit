@@ -126,7 +126,7 @@ async def test_scan_events_interleaves_worker_log_with_audit_trail(monkeypatch):
         report_service, "get_firestore_client", lambda: FakeFirestoreClient(docs=audit_docs)
     )
 
-    async def fake_get_scan_logs(scan_id):
+    async def fake_get_scan_logs(scan_id, after=None):
         return worker_docs
 
     monkeypatch.setattr(log_service, "get_scan_logs", fake_get_scan_logs)

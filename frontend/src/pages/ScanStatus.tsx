@@ -32,17 +32,25 @@ export default function ScanStatus() {
 
   // Navigating between two scan routes reuses this component, so clear the
   // previous scan's data rather than showing it under the new id.
+  // Newest event timestamp already held, so each poll asks only for what has
+  // happened since. A ref rather than state: it must not restart polling.
+  const cursor = useRef<string | undefined>(undefined)
+
   useEffect(() => {
     setData(null)
     setError(null)
+    cursor.current = undefined
   }, [id])
 
   usePolling(
     async () => {
       if (!id) return false
       try {
-        const d = await api.getScanStatus(id)
-        setData(d)
+        const d = await api.getScanStatus(id, cursor.current)
+        cursor.current = d.events[d.events.length - 1]?.ts ?? cursor.current
+        // First poll sends no cursor and returns the whole trail; later ones
+        // return only new lines, so they extend what is already on screen.
+        setData((prev) => (prev ? { scan: d.scan, events: [...prev.events, ...d.events] } : d))
         upsert(d.scan)
         return !TERMINAL_STATUSES.includes(d.scan.status)
       } catch (e) {

@@ -41,9 +41,10 @@ class ScanOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
-    config_id: uuid.UUID
+    # No config_id: it is the scan_configs primary key, an internal join handle
+    # the SPA never renders. No error_message either — the column is never
+    # written, and a failure surfaces as an event in the scan's log instead.
     status: str = Field(pattern="^(" + "|".join(SCAN_STATUSES) + ")$")
-    error_message: str | None = None
     created_at: datetime
     started_at: datetime | None = None
     finished_at: datetime | None = None

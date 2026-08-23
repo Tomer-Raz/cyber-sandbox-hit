@@ -66,12 +66,23 @@ export const api = {
   getScan: (id: string): Promise<Scan> =>
     route(() => engine.getScan(id), async () => toScan((await http.get<ApiScan>(`/scans/${id}`)).data), id),
 
-  getScanStatus: (id: string): Promise<StatusPayload> =>
+  // `after` is the newest event timestamp the caller already holds; the server
+  // then returns only newer lines and the caller appends. Without it a poll
+  // every 1.5s re-sent the entire log, so the cost of watching a scan grew with
+  // how long the scan had been running.
+  getScanStatus: (id: string, after?: string): Promise<StatusPayload> =>
     route(
-      () => engine.getStatusPayload(id),
+      () => {
+        // The mock engine has no cursor, so trim here instead — callers append,
+        // and they must not have to know which backend answered them.
+        const payload = engine.getStatusPayload(id)
+        if (!payload || !after) return payload
+        return { ...payload, events: payload.events.filter((e) => e.ts > after) }
+      },
       async () => {
         const { data } = await http.get<{ scan: ApiScan; events: ApiScanEvent[] }>(
           `/scans/${id}/status`,
+          after ? { params: { after } } : undefined,
         )
         return { scan: toScan(data.scan), events: data.events.map(toScanEvent) }
       },

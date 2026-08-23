@@ -1,4 +1,5 @@
 from collections.abc import Awaitable, Callable
+from datetime import datetime
 
 from google.cloud import firestore
 
@@ -27,18 +28,24 @@ async def log_scan_event(
     )
 
 
-async def get_scan_logs(scan_id: str, limit: int = 2000) -> list[dict]:
-    """Every step the scanner worker logged for one scan, newest first.
+async def get_scan_logs(
+    scan_id: str, limit: int = 2000, after: datetime | None = None
+) -> list[dict]:
+    """Steps the scanner worker logged for one scan, newest first.
 
     Matches the scan_id ASC + timestamp DESC composite index (§6). The limit is
     a safety bound on the read, not a display cap — newest-first means that if
     a scan ever did exceed it, it's the oldest lines that get dropped.
+
+    `after` narrows the read to lines written since a timestamp the caller
+    already has. The status page polls every 1.5s, and without this each poll
+    re-read and re-sent the whole log — the cost of a poll grew with the length
+    of the scan it was watching. A range filter on the same field the index
+    already orders by needs no new index.
     """
     client = get_firestore_client()
-    query = (
-        client.collection(_SCAN_LOGS_COLLECTION)
-        .where("scan_id", "==", scan_id)
-        .order_by("timestamp", direction=firestore.Query.DESCENDING)
-        .limit(limit)
-    )
+    query = client.collection(_SCAN_LOGS_COLLECTION).where("scan_id", "==", scan_id)
+    if after is not None:
+        query = query.where("timestamp", ">", after)
+    query = query.order_by("timestamp", direction=firestore.Query.DESCENDING).limit(limit)
     return [doc.to_dict() async for doc in query.stream()]

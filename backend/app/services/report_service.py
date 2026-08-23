@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timezone
 
 from fpdf import FPDF
 from google.cloud import firestore
@@ -137,23 +138,34 @@ def _ai_insight(findings: list[ReportFinding], counts: dict[str, int]) -> Report
     )
 
 
-async def scan_events(scan: Scan) -> list[ScanEvent]:
-    """Full execution log for one scan, oldest first.
+async def scan_events(scan: Scan, after: datetime | None = None) -> list[ScanEvent]:
+    """Execution log for one scan, oldest first.
 
     Interleaves the API-side lifecycle trail (audit_events, written when a user
     starts or cancels a scan) with the scanner worker's step-by-step log
     (scan_logs). audit_events is queried on scan_id alone and the merged list
     is sorted here, so the cross-collection interleave needs no extra Firestore
     composite index beyond the two §6 already defines.
+
+    With `after`, only lines newer than that timestamp come back — what the
+    polling status endpoint asks for, so a poll costs what happened since the
+    last one rather than the whole scan so far. Only the worker log applies it
+    in the query; a scan has at most a couple of audit rows, and filtering
+    those in memory keeps the index requirement unchanged.
     """
     scan_id = str(scan.id)
+    if after is not None and after.tzinfo is None:
+        after = after.replace(tzinfo=timezone.utc)
     try:
         client = get_firestore_client()
         query = client.collection(_AUDIT_EVENTS_COLLECTION).where("scan_id", "==", scan_id)
         audit_rows = [doc.to_dict() async for doc in query.stream()]
-        worker_rows = await log_service.get_scan_logs(scan_id)
+        worker_rows = await log_service.get_scan_logs(scan_id, after=after)
     except Exception:  # noqa: BLE001 - the report is still useful without the trail
         return []
+
+    if after is not None:
+        audit_rows = [row for row in audit_rows if _is_after(row.get("timestamp"), after)]
 
     events = [
         ScanEvent(
@@ -176,6 +188,17 @@ async def scan_events(scan: Scan) -> list[ScanEvent]:
         if row.get("timestamp")
     ]
     return sorted(events, key=lambda e: e.timestamp)
+
+
+def _is_after(timestamp, after: datetime) -> bool:
+    """Firestore hands back tz-aware timestamps, but a row mid-write can carry a
+    sentinel instead, so this tolerates anything that isn't a datetime.
+    """
+    if not isinstance(timestamp, datetime):
+        return False
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.replace(tzinfo=timezone.utc)
+    return timestamp > after
 
 
 # fpdf's built-in fonts encode to Latin-1 and raise on anything outside it.

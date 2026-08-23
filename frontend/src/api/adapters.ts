@@ -25,9 +25,7 @@ import { groupByCategory } from '@/lib/format'
 // Wire shapes mirror backend/app/schemas.
 export interface ApiScan {
   id: string
-  config_id: string
   status: string
-  error_message: string | null
   created_at: string
   started_at: string | null
   finished_at: string | null
@@ -290,8 +288,6 @@ export function toScanReport(dto: ApiScanReport): ScanReport {
     scan: toScan({
       ...dto,
       id: dto.scan_id,
-      config_id: '',
-      error_message: null,
       region: '',
       is_anomaly: dto.anomaly.is_anomaly,
     }),

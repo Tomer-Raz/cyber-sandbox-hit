@@ -134,6 +134,12 @@ async def get_scan(
 @router.get("/{scan_id}/status", response_model=ScanStatusOut)
 async def get_scan_status(
     scan_id: uuid.UUID,
+    # The newest event timestamp the caller already has. The SPA polls this
+    # every 1.5s and appends, so without a cursor the whole log went back down
+    # the wire on every poll and each poll re-read every log document — a cost
+    # that grew with the length of the scan being watched. Omitted, the full
+    # trail comes back, which is what a fresh page load wants.
+    after: datetime | None = None,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ScanStatusOut:
@@ -156,7 +162,7 @@ async def get_scan_status(
 
     return ScanStatusOut(
         scan=await scan_view_service.build_scan_out(scan, target, db),
-        events=await report_service.scan_events(scan),
+        events=await report_service.scan_events(scan, after=after),
     )
 
 

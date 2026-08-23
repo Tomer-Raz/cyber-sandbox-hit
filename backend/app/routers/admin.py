@@ -111,12 +111,18 @@ async def get_user(user_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -> Ad
     )
 
 
+# What `details` may carry, rather than whatever the Firestore document happens
+# to hold. `log_audit_event(**extra)` takes arbitrary keys, so an allowlist is
+# the difference between a new call site adding a field to the audit trail and a
+# new call site adding a field to an API response.
+_ACTIVITY_DETAIL_FIELDS = ("scan_id", "target_id", "actor_email", "email")
+
+
 def _to_activity_event(event: dict) -> AdminActivityEvent:
-    known = {"action", "timestamp", "user_id"}
     return AdminActivityEvent(
         action=event.get("action") or "unknown",
         timestamp=event.get("timestamp"),
-        details={k: v for k, v in event.items() if k not in known},
+        details={k: event[k] for k in _ACTIVITY_DETAIL_FIELDS if k in event},
     )
 
 
