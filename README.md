@@ -57,7 +57,7 @@ Anomaly detection and PDF/JSON report signing run inside the FastAPI backend —
 | Layer | Technology |
 |-------|-----------|
 | Frontend | React, Ant Design, Recharts, Google OAuth 2.0 |
-| Backend | Python, FastAPI, SQLAlchemy (async), slowapi (rate limiting) |
+| Backend | Python, FastAPI, SQLAlchemy (async), limits (rate limiting) |
 | Scanning | OWASP ZAP, run as a Cloud Run Job |
 | AI | Vertex AI (Gemini 2.5 Flash) for CVE/CVSS enrichment |
 | Databases | Cloud SQL for PostgreSQL, Firestore |

@@ -10,6 +10,19 @@ os.environ.setdefault("JWT_SIGNING_KEY", "test-signing-key")
 os.environ.setdefault("GOOGLE_OAUTH_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
 os.environ.setdefault("ALLOWED_ORIGINS", "http://localhost:5173")
 
+import pytest  # noqa: E402 - must come after the env defaults above
+
+from app.core import rate_limit  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _reset_login_rate_limit():
+    """The sign-in limiter counts per process, so without this one test's
+    requests would count against the next one's budget.
+    """
+    rate_limit.reset()
+    yield
+
 
 class FakeResult:
     """Stands in for a SQLAlchemy Result — enough of the surface that

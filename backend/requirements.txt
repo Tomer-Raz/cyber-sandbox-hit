@@ -13,7 +13,7 @@ google-cloud-run==0.16.1
 google-cloud-resource-manager==1.18.0
 httpx==0.28.1
 cryptography>=42.0.0
-slowapi>=0.1.9
+limits==5.8.0
 fpdf2==2.8.2
 python-owasp-zap-v2.4==0.1.0
 
