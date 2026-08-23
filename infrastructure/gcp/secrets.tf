@@ -76,6 +76,26 @@ resource "google_secret_manager_secret_version" "jwt_signing_key" {
   }
 }
 
+# RSA private key the backend signs exported reports with. Deliberately not a
+# `tls_private_key` resource: that would put the private key in Terraform state
+# in the clear. Generated and uploaded by hand, like the OAuth client secret:
+#   openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 |
+#     gcloud secrets versions add sandbox-dev-report-signing-key --data-file=-
+# Until a version exists the backend serves exports with no signature headers.
+resource "google_secret_manager_secret" "report_signing_key" {
+  secret_id = "${local.prefix}-report-signing-key"
+
+  replication {
+    auto {}
+  }
+
+  depends_on = [google_project_service.services]
+
+  lifecycle {
+    ignore_changes = [terraform_labels]
+  }
+}
+
 # ── Access ───────────────────────────────────────────────────────────────────
 
 resource "google_secret_manager_secret_iam_member" "backend_db_password" {
@@ -92,6 +112,12 @@ resource "google_secret_manager_secret_iam_member" "backend_oauth_client_secret"
 
 resource "google_secret_manager_secret_iam_member" "backend_jwt_key" {
   secret_id = google_secret_manager_secret.jwt_signing_key.id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.backend.email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "backend_report_signing_key" {
+  secret_id = google_secret_manager_secret.report_signing_key.id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.backend.email}"
 }

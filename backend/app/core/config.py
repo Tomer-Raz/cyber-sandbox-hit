@@ -46,6 +46,13 @@ class Settings(SharedSettings):
 
     allowed_origins: str = ""
 
+    # PEM-encoded RSA private key used to sign exported reports, from Secret
+    # Manager like DB_PASSWORD. Signing is pointless unless the key outlives the
+    # request — a per-request key lets anyone who edits a report re-sign it — so
+    # when this is unset the export is served with no signature headers at all
+    # rather than a self-certifying one. See security/field_tampering.md.
+    report_signing_key: str = ""
+
     # Opt-in rather than derived from `environment`: the deployed service runs
     # with ENVIRONMENT=dev, so keying the browsable schema off that would leave
     # /docs, /redoc and /openapi.json public in production. They list every

@@ -9,7 +9,7 @@ from app.models.user import User
 from app.schemas.report import ScanReport
 from app.services import report_service
 
-from app.core.crypto import ReportSigner
+from app.core.crypto import get_report_signer
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 
@@ -36,33 +36,37 @@ async def export_report(
         )
 
     report = await report_service.build_scan_report(scan_id, user, db)
-    signer = ReportSigner()
 
     if format == "pdf":
-        pdf_bytes = report_service.render_pdf(report)
-        signature = signer.sign_report(pdf_bytes)
-        pub_key = signer.export_public_key_pem().replace("\n", "\\n")
-
-        return Response(
-            content=pdf_bytes,
-            media_type="application/pdf",
-            headers={
-                "Content-Disposition": f'attachment; filename="scan-{scan_id}.pdf"',
-                "X-Report-Signature": signature,
-                "X-Report-Public-Key": pub_key,
-            },
+        body, media_type, suffix = report_service.render_pdf(report), "application/pdf", "pdf"
+    else:
+        body, media_type, suffix = (
+            report.model_dump_json(indent=2).encode("utf-8"),
+            "application/json",
+            "json",
         )
 
-    json_str = report.model_dump_json(indent=2)
-    signature = signer.sign_report(json_str.encode("utf-8"))
-    pub_key = signer.export_public_key_pem().replace("\n", "\\n")
-
     return Response(
-        content=json_str,
-        media_type="application/json",
+        content=body,
+        media_type=media_type,
         headers={
-            "Content-Disposition": f'attachment; filename="scan-{scan_id}.json"',
-            "X-Report-Signature": signature,
-            "X-Report-Public-Key": pub_key,
+            "Content-Disposition": f'attachment; filename="scan-{scan_id}.{suffix}"',
+            **_signature_headers(body),
         },
     )
+
+
+def _signature_headers(body: bytes) -> dict[str, str]:
+    """Signs the exact bytes being returned, when a key is configured.
+
+    Absent a key there are no headers at all: a signature the caller cannot
+    check against anything they already trust is worse than none, because it
+    invites them to trust it.
+    """
+    signer = get_report_signer()
+    if signer is None:
+        return {}
+    return {
+        "X-Report-Signature": signer.sign_report(body),
+        "X-Report-Public-Key": signer.export_public_key_pem().replace("\n", "\\n"),
+    }

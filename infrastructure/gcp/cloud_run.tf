@@ -130,6 +130,18 @@ resource "google_cloud_run_v2_service" "backend" {
           }
         }
       }
+      # Add a version to the secret before this env var reaches the service —
+      # a secret_key_ref pointing at a secret with no versions fails the
+      # revision at startup. See the openssl line in secrets.tf.
+      env {
+        name = "REPORT_SIGNING_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.report_signing_key.secret_id
+            version = "latest"
+          }
+        }
+      }
 
       startup_probe {
         initial_delay_seconds = 5
