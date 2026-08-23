@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.core.body_limit import BodySizeLimitMiddleware
 from app.core.config import get_settings
 from app.core.logging_config import RequestIDMiddleware, setup_logging
 from app.routers import admin, auth, dashboard, health, reports, scans, targets
@@ -19,6 +20,11 @@ app = FastAPI(
 
 # Register Request-ID Middleware
 app.add_middleware(RequestIDMiddleware)
+
+# Added after RequestIDMiddleware so it runs before it: middleware added last
+# sits outermost, and an oversized body should be turned away before any other
+# work happens on the request.
+app.add_middleware(BodySizeLimitMiddleware)
 
 # The service is public on the internet and the ID token is the only other
 # gate, so this is never "*".

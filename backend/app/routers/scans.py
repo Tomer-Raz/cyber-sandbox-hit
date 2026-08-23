@@ -87,7 +87,10 @@ async def create_scan(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     config = ScanConfig(
-        user_id=user.id, target_id=target.id, scan_type=body.scan_type, options=body.options
+        user_id=user.id,
+        target_id=target.id,
+        scan_type=body.scan_type,
+        options=body.options.model_dump(),
     )
     db.add(config)
     await db.flush()

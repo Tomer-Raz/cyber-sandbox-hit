@@ -8,10 +8,25 @@ from app.models.scan import SCAN_STATUSES
 _SCAN_TYPES = ("baseline", "full")
 
 
+class ScanOptions(BaseModel):
+    """The scan toggles the SPA sends (`frontend/src/types/index.ts`).
+
+    Spelled out rather than accepted as a free-form dict: the previous `dict`
+    took arbitrary JSON of any size and stored it on every scan, and nothing
+    ever read it back. Unknown keys are dropped here instead of persisted.
+    """
+
+    activeScan: bool = False
+    ajaxSpider: bool = False
+    aiCveMatching: bool = False
+    exploitValidation: bool = False
+    maxDepth: int = Field(default=5, ge=1, le=20)
+
+
 class ScanCreate(BaseModel):
     target_id: uuid.UUID
     scan_type: str = Field(default="baseline", pattern="^(" + "|".join(_SCAN_TYPES) + ")$")
-    options: dict = Field(default_factory=dict)
+    options: ScanOptions = Field(default_factory=ScanOptions)
 
 
 class SeverityCounts(BaseModel):

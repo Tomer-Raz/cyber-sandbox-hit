@@ -1,9 +1,16 @@
 import json
 import logging
+import re
 import time
 import uuid
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
+
+# A correlation id is echoed back to the caller and used to tie log lines
+# together, so an incoming one is honoured only if it looks like an id. The
+# previous code reflected the header verbatim, which meant any content and any
+# length came straight back in a response header.
+_SAFE_REQUEST_ID = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 
 
 class JSONFormatter(logging.Formatter):
@@ -41,8 +48,10 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
     """Middleware that attaches a unique X-Request-ID to every request/response."""
 
     async def dispatch(self, request: Request, call_next) -> Response:
-        # Use incoming X-Request-ID header if provided, otherwise generate a new UUID
-        request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+        # Honour a caller-supplied id so a trace spans the SPA and the API, but
+        # only when it is well formed — otherwise mint one.
+        incoming = request.headers.get("X-Request-ID", "")
+        request_id = incoming if _SAFE_REQUEST_ID.match(incoming) else str(uuid.uuid4())
         request.state.request_id = request_id
 
         response = await call_next(request)
