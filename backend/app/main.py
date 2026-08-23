@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.body_limit import BodySizeLimitMiddleware
 from app.core.config import get_settings
 from app.core.logging_config import RequestIDMiddleware, setup_logging
+from app.core.security_headers import SecurityHeadersMiddleware
 from app.routers import admin, auth, dashboard, health, reports, scans, targets
 
 # Initialize structured JSON logging
@@ -35,6 +36,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Last, so it is the outermost layer and every response on the way out passes
+# through it — including the ones no route produced: CORS preflights, the 413
+# from the body limit, and unhandled exceptions.
+app.add_middleware(SecurityHeadersMiddleware)
 
 app.include_router(health.router)
 app.include_router(auth.router)
