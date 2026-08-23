@@ -83,7 +83,7 @@ def test_create_scan_400_when_target_no_longer_resolves_safely(monkeypatch):
     user = _override_user()
     app.dependency_overrides[get_current_user] = lambda: user
     target = make(Target, user_id=user.id, url="https://target.example", approved=True)
-    _with_session(FakeSession(execute_results=[FakeResult([target])]))
+    _with_session(FakeSession(execute_results=[FakeResult([target])], scalar_results=[0]))
 
     async def raise_unsafe(url):
         raise scans_router.UnsafeTargetURLError("now resolves to a disallowed address")
@@ -99,7 +99,7 @@ def test_create_scan_502_and_rolls_back_when_job_fails_to_start(monkeypatch):
     user = _override_user()
     app.dependency_overrides[get_current_user] = lambda: user
     target = make(Target, user_id=user.id, url="https://target.example", approved=True)
-    session = FakeSession(execute_results=[FakeResult([target])])
+    session = FakeSession(execute_results=[FakeResult([target])], scalar_results=[0])
     _with_session(session)
     monkeypatch.setattr(scans_router, "validate_target_url", passthrough_target_url)
 
@@ -122,7 +122,9 @@ def test_create_scan_success_starts_job_and_returns_running(monkeypatch):
         ScanConfig, user_id=user.id, target_id=target.id, scan_type="baseline"
     )
     _with_session(
-        FakeSession(execute_results=[FakeResult([target]), FakeResult([config])])
+        FakeSession(
+            execute_results=[FakeResult([target]), FakeResult([config])], scalar_results=[0]
+        )
     )
     monkeypatch.setattr(scans_router, "validate_target_url", passthrough_target_url)
 

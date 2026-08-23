@@ -46,6 +46,12 @@ class Settings(SharedSettings):
 
     allowed_origins: str = ""
 
+    # Opt-in rather than derived from `environment`: the deployed service runs
+    # with ENVIRONMENT=dev, so keying the browsable schema off that would leave
+    # /docs, /redoc and /openapi.json public in production. They list every
+    # route, admin paths included, which is free reconnaissance.
+    enable_api_docs: bool = False
+
     # Custom project-level IAM role whose members are the app's admins. Only
     # the role *name* lives in config — who holds it is read from the project
     # IAM policy at runtime (app.services.admin_directory), so no identity is

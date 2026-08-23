@@ -2,10 +2,11 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user
+from app.core.rate_limit import enforce_write_rate_limit
 from app.core.ssrf import UnsafeTargetURLError, validate_target_url
 from app.db.session import get_db
 from app.models.scan import Scan
@@ -23,6 +24,13 @@ router = APIRouter(prefix="/api/scans", tags=["scans"])
 
 _ACTIVE_STATUSES = ("pending", "running")
 
+# A scan is a Cloud Run Job execution that can run for the full scanner timeout
+# (30 min) and, for scan_type="full", sends attack payloads at the target. The
+# rate limit alone would still let a script leave hundreds of them in flight, so
+# this caps what one account can have running at once — the ceiling on both
+# spend and on how hard this platform can be pointed at someone.
+MAX_ACTIVE_SCANS_PER_USER = 3
+
 
 @router.get("/", response_model=list[ScanOut])
 async def list_scans(
@@ -33,7 +41,12 @@ async def list_scans(
     return await scan_view_service.build_scan_outs(rows)
 
 
-@router.post("/", response_model=ScanOut, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/",
+    response_model=ScanOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(enforce_write_rate_limit)],
+)
 async def create_scan(
     body: ScanCreate,
     user: User = Depends(get_current_user),
@@ -47,6 +60,23 @@ async def create_scan(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Target not found")
     if not target.approved:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Target is not approved")
+
+    # Ahead of the DNS probe below, so a script that is already at the ceiling
+    # is turned away without the backend doing any network work on its behalf.
+    active_scans = await db.scalar(
+        select(func.count())
+        .select_from(Scan)
+        .join(ScanConfig, Scan.config_id == ScanConfig.id)
+        .where(ScanConfig.user_id == user.id, Scan.status.in_(_ACTIVE_STATUSES))
+    )
+    if (active_scans or 0) >= MAX_ACTIVE_SCANS_PER_USER:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=(
+                f"You already have {MAX_ACTIVE_SCANS_PER_USER} scans running. "
+                "Wait for one to finish, or cancel it, before starting another."
+            ),
+        )
 
     # Re-checked at scan start, not just at target creation — DNS can change
     # between the two (rebinding), and this is the only authorization gate

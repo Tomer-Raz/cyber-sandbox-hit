@@ -8,7 +8,14 @@ from app.routers import admin, auth, dashboard, health, reports, scans, targets
 # Initialize structured JSON logging
 setup_logging()
 
-app = FastAPI(title="Sandbox Playground API")
+_settings = get_settings()
+
+app = FastAPI(
+    title="Sandbox Playground API",
+    docs_url="/docs" if _settings.enable_api_docs else None,
+    redoc_url="/redoc" if _settings.enable_api_docs else None,
+    openapi_url="/openapi.json" if _settings.enable_api_docs else None,
+)
 
 # Register Request-ID Middleware
 app.add_middleware(RequestIDMiddleware)
@@ -17,7 +24,7 @@ app.add_middleware(RequestIDMiddleware)
 # gate, so this is never "*".
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=get_settings().cors_origins,
+    allow_origins=_settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

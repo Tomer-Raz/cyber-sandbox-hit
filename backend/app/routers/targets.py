@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user
+from app.core.rate_limit import enforce_write_rate_limit
 from app.core.ssrf import UnsafeTargetURLError, validate_target_url
 from app.db.session import get_db
 from app.models.target import Target
@@ -25,7 +26,12 @@ async def list_targets(
     return list(result.scalars().all())
 
 
-@router.post("/", response_model=TargetOut, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/",
+    response_model=TargetOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(enforce_write_rate_limit)],
+)
 async def create_target(
     body: TargetCreate,
     user: User = Depends(get_current_user),
