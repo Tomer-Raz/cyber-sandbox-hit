@@ -26,6 +26,11 @@ function backendUserToAppUser(user: BackendUser): AppUser {
 
 const STORAGE_KEY = 'sbx.auth.google.credential'
 
+// Temporary guest access: that bearer is `guest.<mode>.<code>`, not a Google ID
+// token, so none of the JWT expiry handling below can read anything out of it.
+// Remove this and its two call sites to drop guest sign-in.
+const isGuestToken = (token: string) => token.startsWith('guest.')
+
 // sessionStorage, not localStorage: this is the live bearer credential, so it
 // stays scoped to the tab. Surviving a reload is the point; surviving a closed
 // browser is not worth the exposure.
@@ -34,7 +39,7 @@ function readStoredCredential(): string | null {
     const token = sessionStorage.getItem(STORAGE_KEY)
     if (!token) return null
     // Checked here so an expired token never causes a doomed /auth/me on load.
-    if (millisUntilExpiry(decodeIdToken(token)) <= 0) {
+    if (!isGuestToken(token) && millisUntilExpiry(decodeIdToken(token)) <= 0) {
       sessionStorage.removeItem(STORAGE_KEY)
       return null
     }
@@ -69,6 +74,9 @@ function GoogleBridge({ children }: { children: React.ReactNode }) {
   const armExpiry = useCallback(
     (credential: string) => {
       if (expiryTimer.current) clearTimeout(expiryTimer.current)
+      expiryTimer.current = null
+      // A guest bearer carries no `exp`; it lasts as long as the tab does.
+      if (isGuestToken(credential)) return
       const ttl = millisUntilExpiry(decodeIdToken(credential))
       expiryTimer.current = ttl > 0 ? setTimeout(logout, ttl) : null
       if (ttl <= 0) logout()
@@ -107,13 +115,10 @@ function GoogleBridge({ children }: { children: React.ReactNode }) {
 
   useEffect(() => () => void (expiryTimer.current && clearTimeout(expiryTimer.current)), [])
 
-  const loginWithCredential = useCallback(
+  // Shared by both sign-in paths. Nothing here trusts the credential: the
+  // session only starts once the backend has accepted it on /auth/me.
+  const activate = useCallback(
     async (credential: string) => {
-      if (!decodeIdToken(credential)) {
-        setStatus('idle')
-        throw new Error('Malformed Google credential')
-      }
-
       setStatus('loading')
       // Set before the request so the axios interceptor attaches it as bearer.
       tokenRef.current = credential
@@ -123,7 +128,8 @@ function GoogleBridge({ children }: { children: React.ReactNode }) {
         const res = await http.get<BackendUser>('/auth/me')
         backendUser = res.data
       } catch (err) {
-        // The backend is the only thing verifying signature/audience/issuer.
+        // The backend is the only thing verifying signature/audience/issuer —
+        // and whether a guest bearer is accepted at all.
         tokenRef.current = null
         setStatus('idle')
         throw err
@@ -144,6 +150,24 @@ function GoogleBridge({ children }: { children: React.ReactNode }) {
     [armExpiry],
   )
 
+  const loginWithCredential = useCallback(
+    async (credential: string) => {
+      if (!decodeIdToken(credential)) {
+        setStatus('idle')
+        throw new Error('Malformed Google credential')
+      }
+      return activate(credential)
+    },
+    [activate],
+  )
+
+  // Temporary guest access — see isGuestToken above. The bearer is not a
+  // secret; the backend refuses it unless GUEST_MODE_ENABLED is on.
+  const loginAsGuest = useCallback(
+    (guestMode: 'user' | 'admin') => activate(`guest.${guestMode}`),
+    [activate],
+  )
+
   // The ID-token flow only comes from Google's rendered button, so there is no
   // programmatic entry point — Login renders <GoogleLogin> instead.
   const login = useCallback(() => Promise.reject(new Error('Sign in using the Google button')), [])
@@ -157,6 +181,7 @@ function GoogleBridge({ children }: { children: React.ReactNode }) {
     logout,
     getToken: () => tokenRef.current,
     loginWithCredential,
+    loginAsGuest,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

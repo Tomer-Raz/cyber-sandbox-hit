@@ -11,7 +11,7 @@ import { APP_TAGLINE } from '@/lib/constants'
 import { ThemeToggle } from '@/theme/ThemeToggle'
 
 export default function Login() {
-  const { login, loginWithCredential, isAuthenticated, status, mode } = useAuth()
+  const { login, loginWithCredential, loginAsGuest, isAuthenticated, status, mode } = useAuth()
   const { token } = theme.useToken()
   const navigate = useNavigate()
   const location = useLocation()
@@ -29,8 +29,11 @@ export default function Login() {
       await attempt()
       toast.success('Signed in to the Sandbox console')
       navigate(from, { replace: true })
-    } catch {
-      toast.error('Sign-in failed', failure)
+    } catch (err) {
+      // Prefer what actually failed. A fixed string here reads as a diagnosis,
+      // and "guest access is not enabled" for what was really an unreachable
+      // backend sends you looking in entirely the wrong place.
+      toast.error('Sign-in failed', err instanceof Error ? err.message : failure)
     } finally {
       setSubmitting(false)
     }
@@ -47,6 +50,13 @@ export default function Login() {
       () => loginWithCredential(credential),
       'The backend rejected this credential. Try again.',
     )
+  }
+
+  // Temporary guest access for the project review — no credential to enter;
+  // the backend refuses it unless GUEST_MODE_ENABLED is on.
+  const signInAsGuest = (guestMode: 'user' | 'admin') => {
+    if (!loginAsGuest) return
+    void signIn(() => loginAsGuest(guestMode), 'Could not start a guest session.')
   }
 
   const busy = submitting || status === 'loading'
@@ -130,6 +140,23 @@ export default function Login() {
             >
               Continue with Google
             </Button>
+          )}
+
+          {mode === 'google' && (
+            <Card size="small" title="Temporary">
+              <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  Guest access for the project review — pick a role to sign in. No Google account
+                  required.
+                </Typography.Text>
+                <Button block disabled={busy} onClick={() => signInAsGuest('user')}>
+                  Sign in as Guest — User role
+                </Button>
+                <Button block disabled={busy} onClick={() => signInAsGuest('admin')}>
+                  Sign in as Guest — Admin role
+                </Button>
+              </Space>
+            </Card>
           )}
 
           <Typography.Text

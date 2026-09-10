@@ -6,6 +6,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.security import InvalidCredential, verify_google_id_token
 from app.db.session import get_db
 from app.models.user import ADMIN_ROLE, USER_ROLE, User
@@ -14,6 +15,74 @@ from app.services import admin_directory, audit_service
 logger = logging.getLogger(__name__)
 
 _bearer = HTTPBearer(auto_error=True)
+
+
+# ── Temporary guest access ───────────────────────────────────────────────────
+# Lets the project be demonstrated by someone who should not have to hand over
+# a Google account. To remove it, delete this block, the branch at the top of
+# `get_current_user`, and `guest_mode_enabled` in app.core.config.
+#
+# The bearer *is* the credential: `guest.<mode>`. There is deliberately no
+# endpoint that mints one — the SPA builds the string and sends it to /auth/me
+# like any other token, which keeps the sign-in rate limit and every other
+# route untouched.
+#
+# It is not a secret and is not meant to be: the guest buttons must work on the
+# first click for a reviewer who has only been given a link, so anything the
+# button could send on their behalf would sit in the JS bundle in clear text.
+# `guest_mode_enabled` is therefore the entire access control here, and while
+# it is on, anyone who can reach the API can obtain an admin session.
+_GUEST_PREFIX = "guest."
+_GUEST_MODES = {"user": USER_ROLE, "admin": ADMIN_ROLE}
+# role -> (google_sub, email, name). `.invalid` is reserved by RFC 2606, so no
+# real domain is written into the codebase.
+_GUEST_PROFILE = {
+    USER_ROLE: ("guest:user", "guest@example.invalid", "Guest"),
+    ADMIN_ROLE: ("guest:admin", "guest-admin@example.invalid", "Guest Admin"),
+}
+
+
+def guest_role(token: str) -> str | None:
+    """The role a `guest.<mode>` bearer grants, or None if it grants none.
+
+    Returns None whenever `GUEST_MODE_ENABLED` is off, so the guest path does
+    not exist at all until it is deliberately switched on.
+    """
+    if not get_settings().guest_mode_enabled or not token.startswith(_GUEST_PREFIX):
+        return None
+    return _GUEST_MODES.get(token[len(_GUEST_PREFIX) :])
+
+
+async def _get_guest_user(role: str, db: AsyncSession) -> User:
+    """The single shared row behind a guest mode, created on first use.
+
+    Every guest shares one identity per mode on purpose: their scans stay in
+    the database and the admin console shows them all under one "Guest" user,
+    instead of accumulating a row per visit.
+
+    No blocked check and no sign-in audit event, unlike the Google path below:
+    a guest admin who blocks the guest user would otherwise lock the demo out
+    of itself, and a guest bearer carries no `iat` to make sign-in logging
+    idempotent, so it would write one event per API call.
+    """
+    sub, email, name = _GUEST_PROFILE[role]
+    result = await db.execute(select(User).where(User.google_sub == sub))
+    user = result.scalar_one_or_none()
+
+    if user is None:
+        user = User(google_sub=sub, email=email, name=name, role=role)
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+        return user
+
+    # The token decides the role, never the stored row — otherwise editing
+    # `users.role` by hand would be enough to turn the guest user into an admin.
+    if user.role != role:
+        user.role = role
+        await db.commit()
+        await db.refresh(user)
+    return user
 
 
 async def resolve_role(claims: dict) -> str:
@@ -69,6 +138,13 @@ async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(_bearer),
     db: AsyncSession = Depends(get_db),
 ) -> User:
+    # Temporary guest access, checked ahead of Google verification because a
+    # guest bearer is not an ID token and could only ever fail it. Inert unless
+    # GUEST_MODE_ENABLED is on — see the block above.
+    guest = guest_role(credentials.credentials)
+    if guest is not None:
+        return await _get_guest_user(guest, db)
+
     try:
         claims = verify_google_id_token(credentials.credentials)
     except InvalidCredential as exc:

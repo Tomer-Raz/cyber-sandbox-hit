@@ -17,6 +17,11 @@ export interface AuthContextValue {
   getToken: () => string | null
   /** Google mode: hands the ID token to the backend, which verifies it. */
   loginWithCredential?: (credential: string) => Promise<void>
+  /**
+   * Temporary guest access for the project review — google mode only.
+   * Accepted only while the backend has GUEST_MODE_ENABLED on.
+   */
+  loginAsGuest?: (mode: 'user' | 'admin') => Promise<void>
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null)

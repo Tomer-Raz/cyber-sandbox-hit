@@ -65,6 +65,19 @@ class Settings(SharedSettings):
     # configured in this codebase or its deployment.
     admin_iam_role_id: str = "appAdmin"
 
+    # Temporary guest sign-in for the project demo. Off (the default) means the
+    # `guest.<mode>` bearer in app.core.deps is not accepted at all, so a
+    # deployment that never sets this has no guest path. Setting it to false
+    # switches guest access off again without a redeploy.
+    #
+    # There is no passcode by design: the SPA's guest buttons have to work on
+    # the first click for a reviewer who was given nothing but a link, and a
+    # code the button sends for them would be readable in the JS bundle
+    # anyway. So while this is on, anyone who can reach the API can take an
+    # admin session — see the block in app.core.deps. Turn it off after the
+    # review.
+    guest_mode_enabled: bool = False
+
     @property
     def cors_origins(self) -> list[str]:
         return [o.strip() for o in self.allowed_origins.split(",") if o.strip()]
