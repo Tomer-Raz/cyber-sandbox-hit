@@ -30,6 +30,60 @@ Registered users log in with Google, add a target, and launch a scan. The backen
 - **Dark / light / system theme**
 - **Rate limiting** — per-user/IP request throttling on the API
 
+## Running Locally
+
+### Frontend only (no backend, no accounts)
+
+The SPA ships with an in-browser mock backend, so this needs nothing else:
+
+```bash
+cd frontend
+npm install
+npm run dev          # http://localhost:5173
+```
+
+### Full stack
+
+Two config files, neither of them in the repo — copy the examples and fill them in:
+
+```bash
+cp backend/.env.example backend/.env          # see the comments in the file
+cp frontend/.env.example frontend/.env.local  # set VITE_USE_MOCKS=false, VITE_AUTH_MODE=google
+```
+
+The backend talks to Cloud SQL, Firestore, Vertex AI and Cloud Run Jobs, so it
+needs credentials for a GCP project. Either sign in with gcloud:
+
+```bash
+gcloud auth application-default login
+```
+
+…or, on a machine with no gcloud and no Google account, point
+`GOOGLE_APPLICATION_CREDENTIALS` in `backend/.env` at a service-account key
+file. The Cloud SQL connector also needs outbound **TCP 3307**; the instance
+has no authorized networks, so there is no direct-to-`DB_HOST` fallback.
+
+```bash
+cd backend
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+alembic upgrade head                                   # first run only
+uvicorn app.main:app --reload --port 8000              # 8000 matches VITE_API_BASE_URL
+```
+
+Then start the frontend as above and open http://localhost:5173.
+
+### Signing in without a Google account
+
+Set `GUEST_MODE_ENABLED=true` in `backend/.env` and the login screen offers
+**Sign in as Guest** in either the user or the admin role — no Google account,
+no passcode. Everything else works as normal; all guests share one identity per
+role, so the admin console shows their scans under a single "Guest" user.
+
+Guest mode is off by default and has no credential of its own: while it is on,
+anyone who can reach the API can take an admin session. Turn it off when the
+review is over.
+
 ## Architecture
 
 ```

@@ -9,6 +9,11 @@ os.environ.setdefault("DB_PASSWORD", "test")
 os.environ.setdefault("JWT_SIGNING_KEY", "test-signing-key")
 os.environ.setdefault("GOOGLE_OAUTH_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
 os.environ.setdefault("ALLOWED_ORIGINS", "http://localhost:5173")
+# Pinned off rather than left to the default, because pydantic-settings falls
+# back to the developer's real `.env` for anything the environment does not
+# already answer — so a local file with guest mode switched on would otherwise
+# silently invert the tests that assert the guest path is inert.
+os.environ.setdefault("GUEST_MODE_ENABLED", "false")
 
 import pytest  # noqa: E402 - must come after the env defaults above
 

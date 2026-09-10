@@ -1,4 +1,6 @@
+import os
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -20,6 +22,14 @@ class SharedSettings(BaseSettings):
 
     vertex_location: str = "europe-west1"
     vertex_model: str = "gemini-2.5-flash"
+
+    # Path to a service-account key file, published to the process environment
+    # by `_export_google_credentials` below. Lets a machine with no gcloud and
+    # no Google account authenticate to GCP, which is the only way to run this
+    # locally without `gcloud auth application-default login`. Left unset on
+    # Cloud Run, where the runtime service account is already the ambient
+    # identity and no key file exists (or should).
+    google_application_credentials: str = ""
 
 
 class Settings(SharedSettings):
@@ -83,9 +93,42 @@ class Settings(SharedSettings):
         return [o.strip() for o in self.allowed_origins.split(",") if o.strip()]
 
 
+def _export_google_credentials(path: str) -> None:
+    """Publishes a service-account key path so google-auth can find it.
+
+    pydantic-settings parses `.env` into the models above but never exports to
+    `os.environ`, and google-auth's ADC lookup reads only `os.environ` — so a
+    GOOGLE_APPLICATION_CREDENTIALS line in `.env` is inert until it is copied
+    across here. Called at import, which is before any GCP client (Cloud SQL
+    connector, Firestore, Vertex AI) resolves credentials, since all three
+    build lazily on first use.
+
+    A value already in the environment wins: Cloud Run's ambient identity and
+    an explicit shell export both have to stay authoritative over a file that
+    happens to be named in `.env`.
+    """
+    if not path or os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
+        return
+
+    # Resolved and checked here rather than left to ADC, which treats a missing
+    # file as "try the next credential source" and eventually fails with an
+    # error naming neither this setting nor the path — or, worse, succeeds as
+    # the wrong identity. Relative paths resolve against the working directory,
+    # the same place `.env` itself is read from.
+    key_file = Path(path).expanduser()
+    if not key_file.is_file():
+        raise FileNotFoundError(
+            f"GOOGLE_APPLICATION_CREDENTIALS is set to {path!r}, which is not a file. "
+            "Point it at a service-account key, or unset it to use ambient credentials."
+        )
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(key_file.resolve())
+
+
 # Eager and safe everywhere: only requires GCP_PROJECT_ID, which both
 # containers set.
 shared_settings = SharedSettings()
+
+_export_google_credentials(shared_settings.google_application_credentials)
 
 
 @lru_cache
